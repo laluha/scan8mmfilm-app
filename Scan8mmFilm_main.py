@@ -6,11 +6,10 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import pyqtSignal
 from PyQt5 import QtCore
 from Scan8mmFilm_ui import Ui_MainWindow
-from FilmScanModule import Frame, Film
+from FilmScanModule import Frame, Film, loadConfig, saveConfig
 import sys
 from time import sleep
-# 
-import piDeviceInterface as pidevi
+ 
 import cv2
 import string
 
@@ -18,17 +17,19 @@ try:
     from picamera2 import Picamera2
     from picamera2.previews.qt import QGlPicamera2
     from libcamera import Transform
+    import piDeviceInterface as pidevi
     picamera2_present = True
 except ImportError:                                                                                                                                                                                            
     picamera2_present = False
  
- 
-picam2 = Picamera2()
-# picam2.post_callback = post_callback
-preview_config = picam2.create_preview_configuration(main={"size": (1640, 1232)},transform=Transform(vflip=True,hflip=True))
-picam2.configure(preview_config)
 
-pidevi.initGpio()
+if  picamera2_present:
+    picam2 = Picamera2()
+    # picam2.post_callback = post_callback
+    preview_config = picam2.create_preview_configuration(main={"size": (1640, 1232)},transform=Transform(vflip=True,hflip=True))
+    picam2.configure(preview_config)
+    
+    pidevi.initGpio()
 
 class Window(QMainWindow, Ui_MainWindow):
     
@@ -39,9 +40,11 @@ class Window(QMainWindow, Ui_MainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setupUi(self)
-        self.lblImage.hide()
-        self.qpicamera2 = QGlPicamera2(picam2, width=800, height=600, keep_ar=False)
-        self.horizontalLayout_3.addWidget(self.qpicamera2)
+        loadConfig()
+        if  picamera2_present:
+            self.lblImage.hide()
+            self.qpicamera2 = QGlPicamera2(picam2, width=800, height=600, keep_ar=False)
+            self.horizontalLayout_3.addWidget(self.qpicamera2)
         self.connectSignalsSlots()
         self.film = Film("Slotshaven")
         self.frame = None
@@ -70,12 +73,13 @@ class Window(QMainWindow, Ui_MainWindow):
         # self.action_Exit.triggered.connect(self.close)
         # self.action_Find_Replace.triggered.connect(self.findAndReplace)
         # self.action_About.triggered.connect(self.about)
-        self.qpicamera2.done_signal.connect(self.capture_done)
+        if  picamera2_present:
+            self.qpicamera2.done_signal.connect(self.capture_done)
         
-    def on_button_clicked():
-        # button.setEnabled(False)
-        cfg = picam2.create_still_configuration()
-        picam2.switch_mode_and_capture_file(cfg, "test.jpg", signal_function=qpicamera2.signal_done)
+    # def on_button_clicked():
+    #    # button.setEnabled(False)
+    #    cfg = picam2.create_still_configuration()
+    #    picam2.switch_mode_and_capture_file(cfg, "test.jpg", signal_function=qpicamera2.signal_done)
 
 
     def capture_done(self,job):
@@ -205,18 +209,21 @@ class Window(QMainWindow, Ui_MainWindow):
         if self.rbtnScan.isChecked():
             self.showInfo("Mode Scan")
             self.lblImage.hide()
-            self.qpicamera2.show()
+            if picamera2_present:            
+                self.qpicamera2.show()
             if self.frame is not None:
                 self.showScan()
         else:
             self.showInfo("Mode Crop")
             self.lblImage.show()
-            self.qpicamera2.hide() 
+            if picamera2_present:            
+                self.qpicamera2.hide() 
             if self.frame is not None:
                 self.showCrop()  
 
     def refreshFrame(self):
-        self.frame = self.film.getCurrentFrame()
+        self.frame = Frame(self.frame.imagePathName)
+        # self.film.getCurrentFrame()
         self.showFrame()
 
     
@@ -264,8 +271,8 @@ class Window(QMainWindow, Ui_MainWindow):
     def about(self):
         QMessageBox.about(
             self,
-            "About Sample Editor",
-            "<p>A sample text editor app built with:</p>"
+            "Film Scanner App",
+            "<p>Built with:</p>"
             "<p>- PyQt</p>"
             "<p>- Qt Designer</p>"
             "<p>- Python</p>",
@@ -368,9 +375,12 @@ if __name__ == "__main__":
         
         app = QApplication(sys.argv) 
         win = Window()
-        picam2.start()
+        if  picamera2_present:
+            picam2.start()
         win.show()
         sys.exit(app.exec())
     except:
-        pidevi.cleanup()
+        if  picamera2_present:
+            pidevi.cleanup()
+        saveConfig()
         sys.exit(0)

@@ -12,15 +12,33 @@ import sys
 import subprocess
 from PyQt5 import QtGui 
 from PyQt5.QtCore import Qt
+import configparser
 
 dbg = 0
 
+def loadConfig():
+    config = configparser.ConfigParser()
+    if len(config.read('scanner.ini')) == 1:
+        Frame.xcal = config['FRAME'].getint('xcal')
+        Frame.ycal = config['FRAME'].getint('ycal')
+    else:
+        saveConfig()
+    
+def saveConfig():
+    config = configparser.ConfigParser()
+    config['FRAME'] = { 
+        'xcal': str(Frame.xcal), 
+        'ycal': str(Frame.ycal)}
+    with open('scanner.ini', 'w') as configfile:
+       config.write(configfile)
+
+    
 class Frame:
     ysize = 534 # 267 # 534/2 # 494 needs to be adjusted to fit the picture
     xsize = 764 # 1310
     xstart = 500 # 574  # 300 x startpoint
         
-    ScaleFactor = 1640.0/640
+    ScaleFactor = 1640.0/640  
         
     whiteCutoff = 220
     
@@ -97,6 +115,9 @@ class Frame:
             self.imageCropped = self.image[y:y+Frame.ysize, x:x+Frame.xsize]
             return None
         cv2.rectangle(self.image, self.p1, self.p2, (0, 255, 0), 10)
+        wp1 = (round(Frame.whiteBoxX1 * Frame.ScaleFactor), round(Frame.whiteBoxY1 * Frame.ScaleFactor))
+        wp2 = (round(Frame.whiteBoxX2 * Frame.ScaleFactor), round(Frame.whiteBoxY2 * Frame.ScaleFactor))
+        cv2.rectangle(self.image, wp1, wp2, (0, 240, 240), 10)
         #cv2waitKey(2)
         #if dbg > 1 :
         #    cv2imshow('Cal-Crop', img)
