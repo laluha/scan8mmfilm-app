@@ -27,7 +27,7 @@ def loadConfig():
         Frame.ycal = config['FRAME'].getint('ycal')
         Frame.xsize = config['FRAME'].getint('xsize')
         Frame.ysize = config['FRAME'].getint('ysize')
-        defaultBaseDir = config['FRAME']['filmdir']
+        defaultBaseDir = config['PATHS']['filmdir']
     else:
         saveConfig()
     
