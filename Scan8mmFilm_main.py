@@ -12,6 +12,7 @@ from time import sleep
  
 import cv2
 import string
+import os
 
 try:
     from picamera2 import Picamera2
@@ -23,7 +24,7 @@ except ImportError:
     picamera2_present = False
  
 
-if  picamera2_present:
+if picamera2_present:
     picam2 = Picamera2()
     # picam2.post_callback = post_callback
     preview_config = picam2.create_preview_configuration(main={"size": (1640, 1232)},transform=Transform(vflip=True,hflip=True))
@@ -35,13 +36,12 @@ class Window(QMainWindow, Ui_MainWindow):
     
     sigToCropTread = pyqtSignal(int)
     sigToScanTread = pyqtSignal(int)
-    sigToPreviewTread = pyqtSignal(int)
     
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setupUi(self)
         loadConfig()
-        if  picamera2_present:
+        if picamera2_present:
             self.lblImage.hide()
             self.qpicamera2 = QGlPicamera2(picam2, width=800, height=600, keep_ar=False)
             self.horizontalLayout_3.addWidget(self.qpicamera2)
@@ -58,7 +58,10 @@ class Window(QMainWindow, Ui_MainWindow):
         
 
     def connectSignalsSlots(self):
-        self.chkMotorOn.toggled.connect(self.motorModeChanged)
+        if picamera2_present:
+            self.chkMotorOn.toggled.connect(self.motorModeChanged)
+        else:
+            self.chkMotorOn.setDisabled(True)
         self.pbtnStart.clicked.connect(self.start)
         self.pbtnStop.clicked.connect(self.stop)
         self.pbtnUp.clicked.connect(self.up)
@@ -95,7 +98,7 @@ class Window(QMainWindow, Ui_MainWindow):
     def on_info(self, info, i, frame = None ):
         self.lblFrameNo.setText(info)
         if frame is not None:
-            # self.lblImage.setPixmap(frame.getCropped())
+            self.lblImage.setPixmap(frame.getCropped())
             self.lblBlob.setPixmap(frame.getBlob())
             self.lblInfo1.setText(f"area={frame.area} edlWhiteCutoff={frame.ownWhiteCutoff}")
             self.lblInfo2.setText(f"cX={frame.cX} cY={frame.cY} bs={frame.blobState}")
@@ -110,7 +113,8 @@ class Window(QMainWindow, Ui_MainWindow):
         if self.rbtnScan.isChecked():
             if self.frame is not None:
                 self.showScan()
-            self.startScanFilm()
+            if picamera2_present:   
+                self.startScanFilm()
         else:
             self.startCropAll()
             
@@ -127,18 +131,20 @@ class Window(QMainWindow, Ui_MainWindow):
             
     def down(self):
         if self.rbtnScan.isChecked():
-            pidevi.stepCcw(2)
-            pidevi.spoolStart()
-            self.showBlob()
+            if picamera2_present:
+                pidevi.stepCcw(2)
+                pidevi.spoolStart()
+                self.showBlob()
         else:
             Frame.ycal += 1
             self.refreshFrame() 
             
     def up(self):
         if self.rbtnScan.isChecked():
-            pidevi.stepCw(2)  
-            pidevi.spoolStart()
-            self.showBlob()
+            if picamera2_present:
+                pidevi.stepCw(2)  
+                pidevi.spoolStart()
+                self.showBlob()
         else:
             Frame.ycal -= 1
             self.refreshFrame()
@@ -162,8 +168,8 @@ class Window(QMainWindow, Ui_MainWindow):
         self.threadCrop = QThreadCrop(self.film)
         self.sigToCropTread.connect(self.threadCrop.on_source)
         self.sigToCropTread.emit(1) 
-        self.threadCrop.start()
         self.threadCrop.sigProgress.connect(self.on_info)
+        self.threadCrop.start()
         self.pbtnStart.setEnabled(False)
 
     def startScanFilm(self):
@@ -171,17 +177,18 @@ class Window(QMainWindow, Ui_MainWindow):
         self.threadScan = QThreadScan(self.film)
         self.sigToScanTread.connect(self.threadScan.on_source)
         self.sigToScanTread.emit(1) 
-        self.threadScan.start()
         self.threadScan.sigProgress.connect(self.on_info)
+        self.threadScan.start()
         self.pbtnStart.setEnabled(False)
            
     def stop(self):
         self.showInfo("stop")
         try:
             if self.rbtnScan.isChecked():
-                self.sigToScanTread.emit(0)
-                self.threadScan.running = False
-                sleep(0.2)
+                if picamera2_present:
+                    self.sigToScanTread.emit(0)
+                    self.threadScan.running = False
+                    sleep(0.2)
                 self.pbtnStart.setEnabled(True)
             else:
                 self.sigToCropTread.emit(0)
@@ -208,8 +215,8 @@ class Window(QMainWindow, Ui_MainWindow):
     def modeChanged(self):
         if self.rbtnScan.isChecked():
             self.showInfo("Mode Scan")
-            self.lblImage.hide()
             if picamera2_present:            
+                self.lblImage.hide()
                 self.qpicamera2.show()
             if self.frame is not None:
                 self.showScan()
@@ -223,7 +230,6 @@ class Window(QMainWindow, Ui_MainWindow):
 
     def refreshFrame(self):
         self.frame = Frame(self.frame.imagePathName)
-        # self.film.getCurrentFrame()
         self.showFrame()
 
     

@@ -16,27 +16,38 @@ import configparser
 
 dbg = 0
 
+inifile = os.path.join(os.path.dirname(__file__),'scanner.ini')
+defaultBaseDir = "c:\\data\\film8\\" if os.sep == "\\" else "/home/pi/film8/"
+
 def loadConfig():
+    global defaultBaseDir
     config = configparser.ConfigParser()
-    if len(config.read('scanner.ini')) == 1:
+    if len(config.read(inifile)) == 1:
         Frame.xcal = config['FRAME'].getint('xcal')
         Frame.ycal = config['FRAME'].getint('ycal')
+        Frame.xsize = config['FRAME'].getint('xsize')
+        Frame.ysize = config['FRAME'].getint('ysize')
+        defaultBaseDir = config['FRAME']['filmdir']
     else:
         saveConfig()
     
 def saveConfig():
+    global defaultBaseDir
     config = configparser.ConfigParser()
     config['FRAME'] = { 
         'xcal': str(Frame.xcal), 
-        'ycal': str(Frame.ycal)}
-    with open('scanner.ini', 'w') as configfile:
+        'ycal': str(Frame.ycal),
+        'xsize': str(Frame.xsize), 
+        'ysize': str(Frame.ysize),
+        }
+    config['PATHS'] = { 'filmdir': defaultBaseDir }
+    with open(inifile, 'w') as configfile:
        config.write(configfile)
 
     
 class Frame:
-    ysize = 534 # 267 # 534/2 # 494 needs to be adjusted to fit the picture
-    xsize = 764 # 1310
-    xstart = 500 # 574  # 300 x startpoint
+    ysize = 534 #  needs to be adjusted to fit the picture
+    xsize = 764 
         
     ScaleFactor = 1640.0/640  
         
@@ -46,10 +57,10 @@ class Frame:
     ycal = 30 # 34 + 267 # 534/2 # 500 calibrate camera frame y position 0=center of blob 
     
     # Left image edgeX = holeCenterX + holeW/2: 377 + 288/2 = (BLOB_X1 + cX) *ScaleFactor + holeW/2
-    xcal = 144  # 10 
+    xcal = 144 
         
     midx = 64
-    midy = 136 # 68 # 100  # blob (S8)
+    midy = 136 
 
     whiteBoxX1 = 544
     whiteBoxY1 = 130
@@ -101,10 +112,6 @@ class Frame:
         #img = cv2.imread(n)
         state = self.find_blob(Frame.BLOB_MIN_AREA)
         
-        # LMP = int(self.cY * Frame.ScaleFactor)+Frame.ycal
-        # self.imageCropped = self.image[LMP-Frame.ysize:LMP+Frame.ysize, Frame.xstart+Frame.xcal:Frame.xstart+Frame.xsize+Frame.xcal]
-        # self.p1 = (Frame.xstart+Frame.xcal, LMP-Frame.ysize) 
-        # self.p2 = (Frame.xstart+Frame.xsize+Frame.xcal, LMP+Frame.ysize)
         x = int((self.cX + Frame.BLOB_X1) * Frame.ScaleFactor)+Frame.xcal
         y = int(self.cY * Frame.ScaleFactor)+Frame.ycal 
         self.p1 = (x, y)
@@ -117,7 +124,7 @@ class Frame:
         cv2.rectangle(self.image, self.p1, self.p2, (0, 255, 0), 10)
         wp1 = (round(Frame.whiteBoxX1 * Frame.ScaleFactor), round(Frame.whiteBoxY1 * Frame.ScaleFactor))
         wp2 = (round(Frame.whiteBoxX2 * Frame.ScaleFactor), round(Frame.whiteBoxY2 * Frame.ScaleFactor))
-        cv2.rectangle(self.image, wp1, wp2, (0, 240, 240), 10)
+        cv2.rectangle(self.image, wp1, wp2, (60, 240, 240), 10)
         #cv2waitKey(2)
         #if dbg > 1 :
         #    cv2imshow('Cal-Crop', img)
@@ -215,7 +222,7 @@ class Film:
     def __init__(self, name = "", baseDir = None):
         self.name = name
         if baseDir == None:
-            self.baseDir = "c:\\data\\film8\\" if os.sep == "\\" else "/home/pi/film8/"
+            self.baseDir = defaultBaseDir
         else:
             self.baseDir = baseDir
         self.scan_dir = self.baseDir + "scan" + os.sep
