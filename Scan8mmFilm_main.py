@@ -1,18 +1,16 @@
 
 from PyQt5.QtWidgets import (
-    QApplication, QDialog, QMainWindow, QMessageBox,
-    QGraphicsPixmapItem, QGraphicsScene
+    QApplication, QMainWindow, QMessageBox
 )
 from PyQt5.QtCore import pyqtSignal
 from PyQt5 import QtCore
 from Scan8mmFilm_ui import Ui_MainWindow
-from FilmScanModule import Frame, Film, loadConfig, saveConfig
+from FilmScanModule import Frame, Film, loadConfig, saveConfig, getAdjustableRects
 import sys
 from time import sleep
  
 import cv2
 import string
-import os
 
 try:
     from picamera2 import Picamera2
@@ -54,8 +52,12 @@ class Window(QMainWindow, Ui_MainWindow):
         # self.graphicsView.setAlignment(QtCore.Qt.AlignJustify|QtCore.Qt.AlignVCenter)
         self.lblFrameCount.setText(f"Number of frames = {self.film.max_pic_num}")
         self.lblFrameNo.setText("")
-        self.lblBlob.setMinimumWidth(Frame.BLOB_W)
-        
+        self.lblBlob.setMinimumWidth(Frame.getBlobWidth())
+        self.adjustableRects = getAdjustableRects()
+        for r in self.adjustableRects:
+            self.comboBox.addItem(r.name)
+        self.adjRectIx = 0
+        self.comboBox.currentIndexChanged.connect(self.adjustableRectChanged)
 
     def connectSignalsSlots(self):
         if picamera2_present:
@@ -73,18 +75,22 @@ class Window(QMainWindow, Ui_MainWindow):
         self.pbtnPrevious.clicked.connect(self.previous)
         self.pbtnRandom.clicked.connect(self.random)
         self.pbtnMakeFilm.clicked.connect(self.makeFilm)
+        self.edlMinBlobArea.editingFinished.connect(self.MinBlobAreaChanged)
         # self.action_Exit.triggered.connect(self.close)
         # self.action_Find_Replace.triggered.connect(self.findAndReplace)
         # self.action_About.triggered.connect(self.about)
         if  picamera2_present:
             self.qpicamera2.done_signal.connect(self.capture_done)
+
+
+    def adjustableRectChanged(self, i):
+        self.adjRectIx = i
         
-    # def on_button_clicked():
-    #    # button.setEnabled(False)
-    #    cfg = picam2.create_still_configuration()
-    #    picam2.switch_mode_and_capture_file(cfg, "test.jpg", signal_function=qpicamera2.signal_done)
-
-
+    def MinBlobAreaChanged(self):
+        minArea = int(self.edlMinBlobArea.text())
+        if minArea > 200 and minArea < 10000:
+            Frame.BLOB_MIN_AREA = minArea
+        
     def capture_done(self,job):
         image = picam2.wait(job)
         # print("picture taken!", image)
@@ -94,15 +100,19 @@ class Window(QMainWindow, Ui_MainWindow):
         self.showCrop()
 
         # button.setEnabled(True)
+        
+    def showCropInfo(self, frame):
+        Frame.rect.getYSize()
+        self.lblInfo1.setText(f"Frame W={Frame.rect.getXSize()} H={Frame.rect.getYSize()} cX={frame.cX} cY={frame.cY}")
+        self.lblInfo2.setText(f"Blob area={frame.area} bs={frame.blobState} Wcut={frame.ownWhiteCutoff}")
+        self.edlMinBlobArea.setText(str(Frame.BLOB_MIN_AREA))
 
     def on_info(self, info, i, frame = None ):
         self.lblFrameNo.setText(info)
         if frame is not None:
             self.lblImage.setPixmap(frame.getCropped())
             self.lblBlob.setPixmap(frame.getBlob())
-            self.lblInfo1.setText(f"area={frame.area} edlWhiteCutoff={frame.ownWhiteCutoff}")
-            self.lblInfo2.setText(f"cX={frame.cX} cY={frame.cY} bs={frame.blobState}")
-    
+            self.showCropInfo(frame)
 
 
     def start(self):
@@ -136,7 +146,10 @@ class Window(QMainWindow, Ui_MainWindow):
                 pidevi.spoolStart()
                 self.showBlob()
         else:
-            Frame.ycal += 1
+            if self.rbtnPosition.isChecked() :
+                self.adjustableRects[self.adjRectIx].adjY(1)
+            else:
+                self.adjustableRects[self.adjRectIx].adjYSize(1)
             self.refreshFrame() 
             
     def up(self):
@@ -146,17 +159,26 @@ class Window(QMainWindow, Ui_MainWindow):
                 pidevi.spoolStart()
                 self.showBlob()
         else:
-            Frame.ycal -= 1
+            if self.rbtnPosition.isChecked() :
+                self.adjustableRects[self.adjRectIx].adjY(-1)
+            else:
+                self.adjustableRects[self.adjRectIx].adjYSize(-1)
             self.refreshFrame()
             
     def left(self):
         if self.rbtnCrop.isChecked():
-            Frame.xcal -= 1
+            if self.rbtnPosition.isChecked() :
+                self.adjustableRects[self.adjRectIx].adjX(-1)
+            else:
+                self.adjustableRects[self.adjRectIx].adjXSize(-1)
             self.refreshFrame()
             
     def right(self):
         if self.rbtnCrop.isChecked():
-            Frame.xcal += 1
+            if self.rbtnPosition.isChecked() :
+                self.adjustableRects[self.adjRectIx].adjX(1)
+            else:
+                self.adjustableRects[self.adjRectIx].adjXSize(1)
             self.refreshFrame()
          
     def showBlob(self):
@@ -268,8 +290,7 @@ class Window(QMainWindow, Ui_MainWindow):
     def showCrop(self):
         self.lblImage.setPixmap(self.frame.crop_pic())
         self.lblBlob.setPixmap(self.frame.getBlob())
-        self.lblInfo1.setText(f"area={self.frame.area} edlWhiteCutoff={self.frame.ownWhiteCutoff}")
-        self.lblInfo2.setText(f"cX={self.frame.cX} cY={self.frame.cY} bs={self.frame.blobState}")
+        self.showCropInfo(self.frame)
     
     def showInfo(self,text):
         self.statusbar.showMessage(text)

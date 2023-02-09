@@ -8,10 +8,8 @@ import os.path
 import cv2
 import random
 import glob
-import sys
 import subprocess
 from PyQt5 import QtGui 
-from PyQt5.QtCore import Qt
 import configparser
 
 dbg = 0
@@ -23,10 +21,10 @@ def loadConfig():
     global defaultBaseDir
     config = configparser.ConfigParser()
     if len(config.read(inifile)) == 1:
-        Frame.xcal = config['FRAME'].getint('xcal')
-        Frame.ycal = config['FRAME'].getint('ycal')
-        Frame.xsize = config['FRAME'].getint('xsize')
-        Frame.ysize = config['FRAME'].getint('ysize')
+        Frame.rect.load(config)
+        Frame.whiteBox.load(config)
+        Frame.BLOB.load(config)
+        Frame.BLOB_MIN_AREA = config['BLOB'].getint('blob_min_area')
         defaultBaseDir = config['PATHS']['filmdir']
     else:
         saveConfig()
@@ -34,47 +32,88 @@ def loadConfig():
 def saveConfig():
     global defaultBaseDir
     config = configparser.ConfigParser()
-    config['FRAME'] = { 
-        'xcal': str(Frame.xcal), 
-        'ycal': str(Frame.ycal),
-        'xsize': str(Frame.xsize), 
-        'ysize': str(Frame.ysize),
-        }
+    Frame.rect.save(config)
+    Frame.whiteBox.save(config)
+    Frame.BLOB.save(config)
+    config['BLOB']['blob_min_area'] = str(Frame.BLOB_MIN_AREA) 
     config['PATHS'] = { 'filmdir': defaultBaseDir }
     with open(inifile, 'w') as configfile:
        config.write(configfile)
+       
+def getAdjustableRects():
+    return [Frame.rect, Frame.BLOB, Frame.whiteBox]
 
+class Rect:
+    def __init__(self, name, x1, y1, x2, y2):
+        self.name = name
+        self.X1 = x1
+        self.Y1 = y1
+        self.X2 = x2
+        self.Y2 = y2
+        
+    def load(self, config):
+        self.X1 = config[self.name].getint('x1')
+        self.X2 = config[self.name].getint('x2')
+        self.Y1 = config[self.name].getint('y1')
+        self.Y2 = config[self.name].getint('y2')
+
+    def save(self, config):
+        if not config.has_section(self.name):
+            config[self.name] = {}
+        config[self.name]['x1'] = str(self.X1)
+        config[self.name]['y1'] = str(self.Y1) 
+        config[self.name]['x2'] = str(self.X2)
+        config[self.name]['y2'] = str(self.Y2)
+
+    def getXSize(self):
+        return self.X2 - self.X1
     
+    def getYSize(self):
+        return self.Y2 - self.Y1
+    
+    def adjX(self, adj):
+        self.X1 = self.X1 + adj
+        self.X2 = self.X2 + adj
+    
+    def adjY(self, adj):
+        self.Y1 = self.Y1 + adj
+        self.Y2 = self.Y2 + adj
+        
+    def adjXSize(self, adj):
+        self.X2 = self.X2 + adj
+    
+    def adjYSize(self, adj):
+        self.Y2 = self.Y2 + adj
+        
 class Frame:
-    ysize = 534 #  needs to be adjusted to fit the picture
-    xsize = 764 
+    ###
+    # ysize = 534 #  needs to be adjusted to fit the picture
+    # xsize = 764 
+        
+    # Top image edgeY = holeCenterY + imageBlackFrame thickness
+    # ycal = 30 # 34 + 267 # 534/2 # 500 calibrate camera frame y position 0=center of blob 
+    
+    # Left image edgeX = holeCenterX + holeW/2: 377 + 288/2 = (BLOB.X1 + cX) *ScaleFactor + holeW/2
+    # xcal = 144 
+    ###
+    
+    midx = 64
+    midy = 136 
+    
+    rect = Rect("FRAME", 144, 30, 144+534, 30+764)
+
+    whiteBox = Rect("white_box", 544, 130, 544+12, 110+130)
+
+    BLOB = Rect("BLOB", 90, 0, 240, 340)  
+    BLOB_MIN_AREA = 4000 # 4000  
         
     ScaleFactor = 1640.0/640  
         
     whiteCutoff = 220
     
-    # Top image edgeY = holeCenterY + imageBlackFrame thickness
-    ycal = 30 # 34 + 267 # 534/2 # 500 calibrate camera frame y position 0=center of blob 
-    
-    # Left image edgeX = holeCenterX + holeW/2: 377 + 288/2 = (BLOB_X1 + cX) *ScaleFactor + holeW/2
-    xcal = 144 
-        
-    midx = 64
-    midy = 136 
-
-    whiteBoxX1 = 544
-    whiteBoxY1 = 130
-    whiteBoxX2 = 544+12
-    whiteBoxY2 = 110+130
-
-    BLOB_Y1 = 0  
-    BLOB_Y2 = 340
-    BLOB_X1 = 90 # 130
-    BLOB_X2 = 240 # 210
-    BLOB_MIN_AREA = 4000 # 4000  
-    
-    BLOB_W = BLOB_X2 - BLOB_X1
-        
+    def getBlobWidth():
+        return Frame.BLOB.X2 - Frame.BLOB.X1
+          
     def __init__(self, imagePathName=None,*,image=None):
         if image is None and imagePathName is not None :
             self.imagePathName = imagePathName
@@ -90,6 +129,7 @@ class Frame:
         
         self.blobState = 1
         self.ownWhiteCutoff = Frame.whiteCutoff
+        
         
     def getQPixmap(self):
         #self.image = cv2.imread(self.imagePathName)
@@ -110,20 +150,20 @@ class Frame:
 
     def crop_pic(self, doCreate=False):
         #img = cv2.imread(n)
-        state = self.find_blob(Frame.BLOB_MIN_AREA)
+        self.blobState = self.find_blob(Frame.BLOB_MIN_AREA)
         
-        x = int((self.cX + Frame.BLOB_X1) * Frame.ScaleFactor)+Frame.xcal
-        y = int(self.cY * Frame.ScaleFactor)+Frame.ycal 
+        x = int((self.cX + Frame.BLOB.X1) * Frame.ScaleFactor)+Frame.rect.X1
+        y = int(self.cY * Frame.ScaleFactor)+Frame.rect.Y1 
         self.p1 = (x, y)
-        self.p2 = (x+Frame.xsize, y+Frame.ysize)
+        self.p2 = (x+Frame.rect.getXSize(), y+Frame.rect.getYSize())
         
         if dbg >= 2: print( self.p1,  self.p2) 
         if doCreate :
-            self.imageCropped = self.image[y:y+Frame.ysize, x:x+Frame.xsize]
+            self.imageCropped = self.image[y:y+Frame.rect.getYSize(), x:x+Frame.rect.getXSize()]
             return None
         cv2.rectangle(self.image, self.p1, self.p2, (0, 255, 0), 10)
-        wp1 = (round(Frame.whiteBoxX1 * Frame.ScaleFactor), round(Frame.whiteBoxY1 * Frame.ScaleFactor))
-        wp2 = (round(Frame.whiteBoxX2 * Frame.ScaleFactor), round(Frame.whiteBoxY2 * Frame.ScaleFactor))
+        wp1 = (round(Frame.whiteBox.X1 * Frame.ScaleFactor), round(Frame.whiteBox.Y1 * Frame.ScaleFactor))
+        wp2 = (round(Frame.whiteBox.X2 * Frame.ScaleFactor), round(Frame.whiteBox.Y2 * Frame.ScaleFactor))
         cv2.rectangle(self.image, wp1, wp2, (60, 240, 240), 10)
         #cv2waitKey(2)
         #if dbg > 1 :
@@ -132,13 +172,13 @@ class Frame:
         return self.convert_cv_qt(self.image)
      
     def getWhiteCutoff(self, imageSmall):
-        img = imageSmall[Frame.whiteBoxY1:Frame.whiteBoxY2, Frame.whiteBoxX1:Frame.whiteBoxX2]
+        img = imageSmall[Frame.whiteBox.Y1:Frame.whiteBox.Y2, Frame.whiteBox.X1:Frame.whiteBox.X2]
         img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         planes = cv2.split(img)
         histSize = 256 #  [Establish the number of bins]
         histRange = (0, 256) # Set the range
         hist = cv2.calcHist(planes, [0], None, [histSize], histRange, accumulate=False)    
-        okPct = (Frame.whiteBoxY2-Frame.whiteBoxY1)*(Frame.whiteBoxX2-Frame.whiteBoxX1)/100.0*5
+        okPct = (Frame.whiteBox.Y2-Frame.whiteBox.Y1)*(Frame.whiteBox.X2-Frame.whiteBox.X1)/100.0*5
         wco = 220
         for i in range(128,256) :
             if hist[i] > okPct :
@@ -153,7 +193,7 @@ class Frame:
     def find_blob(self, area_size):
         self.imageSmall = cv2.resize(self.image, (640, 480))
         # the image crop with the sprocket hole 
-        img = self.imageSmall[Frame.BLOB_Y1:Frame.BLOB_Y2, Frame.BLOB_X1:Frame.BLOB_X2]
+        img = self.imageSmall[Frame.BLOB.Y1:Frame.BLOB.Y2, Frame.BLOB.X1:Frame.BLOB.X2]
         img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         self.ownWhiteCutoff = self.getWhiteCutoff(self.imageSmall)
         ret, self.imageBlob = cv2.threshold(img, self.ownWhiteCutoff, 255, 0) # 220 # 200,255,0
@@ -203,11 +243,11 @@ class Frame:
         # if dbg >= 2:
             # ui = input("press return")   
         p1 = (0, self.cY) 
-        p2 = (Frame.BLOB_X2-Frame.BLOB_X1, self.cY)
+        p2 = (Frame.BLOB.X2-Frame.BLOB.X1, self.cY)
         #print(p1, p2)
         cv2.line(self.imageBlob, p1, p2, (0, 255, 0), 3) 
         p1 = (self.cX, 0) 
-        p2 = (self.cX, Frame.BLOB_Y2-Frame.BLOB_Y1) 
+        p2 = (self.cX, Frame.BLOB.Y2-Frame.BLOB.Y1) 
         #print(p1, p2)
         cv2.line(self.imageBlob, p1, p2, (0, 255, 0), 3)
         self.blobState = blobState
@@ -255,10 +295,13 @@ class Film:
     def getCurrentFrame(self):
         self.curFrameNo -= 1
         return self.getNextFrame()
+    
+    def getFileList(self):
+        return sorted([f for f in os.listdir(self.scan_dir) if 
+                    os.path.isfile(os.path.join(self.scan_dir, f))])
 
     def getRandomFrame(self):
-        fileList = sorted([f for f in os.listdir(self.scan_dir) if 
-                    os.path.isfile(os.path.join(self.scan_dir, f))])
+        fileList = self.getFileList()
         cnt = len(fileList)
         self.max_pic_num = cnt
         if cnt > 0 :
@@ -271,8 +314,7 @@ class Film:
             return None
         
     def getNextFrame(self):
-        fileList = sorted([f for f in os.listdir(self.scan_dir) if 
-                    os.path.isfile(os.path.join(self.scan_dir, f))])
+        fileList = self.getFileList()
         cnt = len(fileList)
         self.max_pic_num = cnt
         if cnt > 0 :
@@ -288,8 +330,7 @@ class Film:
             return None   
 
     def getPreviousFrame(self):
-        fileList = sorted([f for f in os.listdir(self.scan_dir) if 
-                    os.path.isfile(os.path.join(self.scan_dir, f))])
+        fileList = self.getFileList()
         cnt = len(fileList)
         self.max_pic_num = cnt
         if cnt > 0 :
