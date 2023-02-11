@@ -3,14 +3,13 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QMessageBox
 )
 from PyQt5.QtCore import pyqtSignal
-from PyQt5 import QtCore
-from Scan8mmFilm_ui import Ui_MainWindow
+from PyQt5 import QtCore, QtWidgets
 from FilmScanModule import Frame, Film, loadConfig, saveConfig, getAdjustableRects
 import sys
 from time import sleep
- 
 import cv2
 import string
+from Scan8mmFilm_ui import Ui_MainWindow
 
 try:
     from picamera2 import Picamera2
@@ -24,7 +23,6 @@ except ImportError:
 
 if picamera2_present:
     picam2 = Picamera2()
-    # picam2.post_callback = post_callback
     preview_config = picam2.create_preview_configuration(main={"size": (1640, 1232)},transform=Transform(vflip=True,hflip=True))
     picam2.configure(preview_config)
     
@@ -42,14 +40,10 @@ class Window(QMainWindow, Ui_MainWindow):
         if picamera2_present:
             self.lblImage.hide()
             self.qpicamera2 = QGlPicamera2(picam2, width=800, height=600, keep_ar=False)
-            self.horizontalLayout_3.addWidget(self.qpicamera2)
+            self.horizontalLayout_4.addWidget(self.qpicamera2)
         self.connectSignalsSlots()
-        self.film = Film("Slotshaven")
+        self.film = Film("")
         self.frame = None
-        # self.graphicsView.setSizeIncrement(QtCore.QSize(0, 0))
-        # self.graphicsView.setFrameShadow(QtWidgets.QFrame.Raised)
-        # self.graphicsView.setSizeAdjustPolicy(QtWidgets.QAbstractScrollArea.AdjustToContentsOnFirstShow)
-        # self.graphicsView.setAlignment(QtCore.Qt.AlignJustify|QtCore.Qt.AlignVCenter)
         self.lblFrameCount.setText(f"Number of frames = {self.film.max_pic_num}")
         self.lblFrameNo.setText("")
         self.lblBlob.setMinimumWidth(Frame.getBlobWidth())
@@ -77,7 +71,6 @@ class Window(QMainWindow, Ui_MainWindow):
         self.pbtnMakeFilm.clicked.connect(self.makeFilm)
         self.edlMinBlobArea.editingFinished.connect(self.MinBlobAreaChanged)
         # self.action_Exit.triggered.connect(self.close)
-        # self.action_Find_Replace.triggered.connect(self.findAndReplace)
         # self.action_About.triggered.connect(self.about)
         if  picamera2_present:
             self.qpicamera2.done_signal.connect(self.capture_done)
@@ -110,13 +103,19 @@ class Window(QMainWindow, Ui_MainWindow):
     def on_info(self, info, i, frame = None ):
         self.lblFrameNo.setText(info)
         if frame is not None:
-            self.lblImage.setPixmap(frame.getCropped())
+            if self.lblImage.isVisible():
+                self.lblImage.setPixmap(frame.getCropped())
             self.lblBlob.setPixmap(frame.getBlob())
             self.showCropInfo(frame)
 
+    def prepLblImage(self):
+        self.lblImage.clear()
+        self.horizontalLayout_4.setSizeConstraint(QtWidgets.QLayout.SetMaximumSize)
+        self.lblImage.setText("")
 
     def start(self):
         self.showInfo("start")
+        self.prepLblImage()
         self.film.name = self.edlFilmName.text()
         self.film.curFrameNo = -1
         self.frame = self.film.getNextFrame()
@@ -183,7 +182,8 @@ class Window(QMainWindow, Ui_MainWindow):
          
     def showBlob(self):
         capture_config = picam2.create_still_configuration({"format": "RGB888"},transform=Transform(vflip=True,hflip=True))
-        image = picam2.switch_mode_and_capture_array(capture_config, "main", signal_function=self.qpicamera2.signal_done)
+        #    image = 
+        picam2.switch_mode_and_capture_array(capture_config, "main", signal_function=self.qpicamera2.signal_done)
          
     def startCropAll(self):
         self.lblScanFrame.setText("")
@@ -219,22 +219,9 @@ class Window(QMainWindow, Ui_MainWindow):
                 self.pbtnStart.setEnabled(True)
         except:
             pass
-                
-    def toValidFileName(self, s):
-        valid_chars = "-_() %s%s" % (string.ascii_letters, string.digits)
-        filename = ''.join(c for c in s if c in valid_chars)
-        filename = filename.replace(' ','_') # I don't like spaces in filenames.
-        return filename    
-                    
-    def makeFilm(self):
-        self.showInfo("makeFilm")  
-        fileName = self.toValidFileName(self.edlFilmName.text())
-        if len(fileName) > 0 :
-            self.lblScanFrame.setText("")
-            self.film.name = fileName
-            self.film.makeFilm(self.film.name)
-        
+    
     def modeChanged(self):
+        self.prepLblImage()
         if self.rbtnScan.isChecked():
             self.showInfo("Mode Scan")
             if picamera2_present:            
@@ -281,14 +268,16 @@ class Window(QMainWindow, Ui_MainWindow):
                 self.showCrop() 
         
     def showScan(self):
-        self.lblImage.setPixmap(self.frame.getQPixmap())
+        self.prepLblImage()
+        self.lblImage.setPixmap(self.frame.getQPixmap(self.lblImage.contentsRect()))
         # self.lblBlob.setPixmap(None)
         self.lblInfo1.setText("")
         self.lblInfo2.setText("")
         self.lblBlob.update()
         
     def showCrop(self):
-        self.lblImage.setPixmap(self.frame.crop_pic())
+        self.prepLblImage()
+        self.lblImage.setPixmap(self.frame.getCropOutline(self.lblImage.contentsRect()))
         self.lblBlob.setPixmap(self.frame.getBlob())
         self.showCropInfo(self.frame)
     
@@ -304,7 +293,34 @@ class Window(QMainWindow, Ui_MainWindow):
             "<p>- Qt Designer</p>"
             "<p>- Python</p>",
         )
-
+# =============================================================================
+    def message(self, s):
+        self.messageText = self.messageText + "\n" + s
+        self.lblImage.setText(self.messageText)  
+           
+    def toValidFileName(self, s):
+        valid_chars = "-_() %s%s" % (string.ascii_letters, string.digits)
+        filename = ''.join(c for c in s if c in valid_chars)
+        filename = filename.replace(' ','_') # I don't like spaces in filenames.
+        return filename    
+                                     
+    def makeFilm(self):
+        self.showInfo("makeFilm")  
+        fileName = self.toValidFileName(self.edlFilmName.text())
+        if len(fileName) == 0 :
+            self.showInfo("Enter a valid filneme!")  
+        else:
+            self.pbtnMakeFilm.setEnabled(False)
+            self.horizontalLayout_4.setSizeConstraint(QtWidgets.QLayout.SetFixedSize)
+            self.lblImage.clear()
+            self.lblScanFrame.setText("")
+            self.film.name = fileName
+            self.messageText = ""
+            self.film.makeFilm(self.film.name, self.message, self.filmDone)
+            
+    def filmDone(self):
+        self.pbtnMakeFilm.setEnabled(True)
+        
 # =============================================================================
 class QThreadCrop(QtCore.QThread):
     sigProgress = pyqtSignal(str, int, Frame)

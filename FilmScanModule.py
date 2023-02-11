@@ -4,12 +4,12 @@ Created on Sun Jan 15 18:45:07 2023
 
 @author: B
 """
-import os.path
+import os
 import cv2
 import random
 import glob
-import subprocess
-from PyQt5 import QtGui 
+from PyQt5 import QtCore, QtGui
+from PyQt5.QtCore import QProcess
 import configparser
 
 dbg = 0
@@ -61,8 +61,8 @@ class Rect:
         if not config.has_section(self.name):
             config[self.name] = {}
         config[self.name]['x1'] = str(self.X1)
-        config[self.name]['y1'] = str(self.Y1) 
         config[self.name]['x2'] = str(self.X2)
+        config[self.name]['y1'] = str(self.Y1) 
         config[self.name]['y2'] = str(self.Y2)
 
     def getXSize(self):
@@ -100,11 +100,11 @@ class Frame:
     midx = 64
     midy = 136 
     
-    rect = Rect("FRAME", 144, 30, 144+534, 30+764)
+    rect = Rect("FRAME", 144, 30, 144+764, 30+534)
 
     whiteBox = Rect("white_box", 544, 130, 544+12, 110+130)
 
-    BLOB = Rect("BLOB", 90, 0, 240, 340)  
+    BLOB = Rect("BLOB", 90, 0, 240, 276)  
     BLOB_MIN_AREA = 4000 # 4000  
         
     ScaleFactor = 1640.0/640  
@@ -131,25 +131,28 @@ class Frame:
         self.ownWhiteCutoff = Frame.whiteCutoff
         
         
-    def getQPixmap(self):
-        #self.image = cv2.imread(self.imagePathName)
-        return self.convert_cv_qt(self.image)
-        # return QtGui.QPixmap(self.imagePathName)
-        
-    def getCropped(self):
-        return self.convert_cv_qt(self.imageCropped)
-        
-    def convert_cv_qt(self, cv_img):
+    def convert_cv_qt(self, cv_img, dest=None):
         """Convert from an opencv image to QPixmap"""
         rgb_image = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
         h, w, ch = rgb_image.shape
         bytes_per_line = ch * w
         convert_to_Qt_format = QtGui.QImage(rgb_image.data, w, h, bytes_per_line, QtGui.QImage.Format_RGB888)
-        #p = convert_to_Qt_format.scaled(self.disply_width, self.display_height, Qt.KeepAspectRatio)
-        return QtGui.QPixmap.fromImage(convert_to_Qt_format)        
+        if dest is None:
+            return QtGui.QPixmap.fromImage(convert_to_Qt_format) 
+        else:
+            im = convert_to_Qt_format.scaled(dest.width(), dest.height(), QtCore.Qt.KeepAspectRatio)
+            return QtGui.QPixmap.fromImage(im)
+        
+    def getQPixmap(self, dest=None):
+        return self.convert_cv_qt(self.image, dest)
+        
+    def getCropped(self, dest=None):
+        return self.convert_cv_qt(self.imageCropped, dest)
+        
+    def getBlob(self) :
+        return self.convert_cv_qt(self.imageBlob)
 
-    def crop_pic(self, doCreate=False):
-        #img = cv2.imread(n)
+    def calcCrop(self):
         self.blobState = self.find_blob(Frame.BLOB_MIN_AREA)
         
         x = int((self.cX + Frame.BLOB.X1) * Frame.ScaleFactor)+Frame.rect.X1
@@ -157,19 +160,17 @@ class Frame:
         self.p1 = (x, y)
         self.p2 = (x+Frame.rect.getXSize(), y+Frame.rect.getYSize())
         
-        if dbg >= 2: print( self.p1,  self.p2) 
-        if doCreate :
-            self.imageCropped = self.image[y:y+Frame.rect.getYSize(), x:x+Frame.rect.getXSize()]
-            return None
+    def getCropOutline(self, dest=None):
+        self.calcCrop()
         cv2.rectangle(self.image, self.p1, self.p2, (0, 255, 0), 10)
         wp1 = (round(Frame.whiteBox.X1 * Frame.ScaleFactor), round(Frame.whiteBox.Y1 * Frame.ScaleFactor))
         wp2 = (round(Frame.whiteBox.X2 * Frame.ScaleFactor), round(Frame.whiteBox.Y2 * Frame.ScaleFactor))
         cv2.rectangle(self.image, wp1, wp2, (60, 240, 240), 10)
-        #cv2waitKey(2)
-        #if dbg > 1 :
-        #    cv2imshow('Cal-Crop', img)
-        #    cv2waitKey(2)
-        return self.convert_cv_qt(self.image)
+        return self.convert_cv_qt(self.image, dest)
+        
+    def cropPic(self):
+        self.calcCrop()
+        self.imageCropped = self.image[self.p1[1]:self.p2[1], self.p1[0]:self.p2[0]]
      
     def getWhiteCutoff(self, imageSmall):
         img = imageSmall[Frame.whiteBox.Y1:Frame.whiteBox.Y2, Frame.whiteBox.X1:Frame.whiteBox.X2]
@@ -242,22 +243,25 @@ class Frame:
         if dbg >= 2: print("cY=", self.cY, "oldcY=", oldcY, "blobState=", blobState)
         # if dbg >= 2:
             # ui = input("press return")   
+        p1 = (0, self.midy) 
+        p2 = (Frame.BLOB.X2-Frame.BLOB.X1, self.midy)
+        #print(p1, p2)
+        cv2.line(self.imageBlob, p1, p2, (0, 255, 255), 1) 
         p1 = (0, self.cY) 
         p2 = (Frame.BLOB.X2-Frame.BLOB.X1, self.cY)
         #print(p1, p2)
-        cv2.line(self.imageBlob, p1, p2, (0, 255, 0), 3) 
+        cv2.line(self.imageBlob, p1, p2, (0, 255, 0), 3)
         p1 = (self.cX, 0) 
         p2 = (self.cX, Frame.BLOB.Y2-Frame.BLOB.Y1) 
         #print(p1, p2)
         cv2.line(self.imageBlob, p1, p2, (0, 255, 0), 3)
         self.blobState = blobState
         return blobState
-        
-    def getBlob(self) :
-        return self.convert_cv_qt(self.imageBlob)
             
 class Film:
-    name = ""
+
+    Resolution = "720x540"
+    Framerate = 12
     
     def __init__(self, name = "", baseDir = None):
         self.name = name
@@ -270,28 +274,8 @@ class Film:
         self.max_pic_num = len([f for f in os.listdir(self.scan_dir) if 
             os.path.isfile(os.path.join(self.scan_dir, f))])  # - number of files in scan directory
         self.curFrameNo = -1
-
-    def cropAll(self, progress) :
-                frameNo = 0
-                os.chdir(self.scan_dir)
-                fileList = sorted(glob.glob('*.jpg'))
-                self.max_pic_num = len(fileList)
-                for fn in fileList:
-                    frame = Frame(os.path.join(self.scan_dir, fn))
-                    frame.crop_pic(True)
-                    cv2.imwrite(os.path.join(self.crop_dir, f"frame{frameNo:06}.jpg"), frame.imageCropped)
-                    self.curFrameNo = frameNo
-                    if progress is not None:
-                        if progress(frame) == 0:
-                            break
-                    frameNo = frameNo+1
-                    
-    def makeFilm(self, name) :
-        os.chdir(self.crop_dir)
-        filmPathName = os.path.join(self.baseDir, name) + '.mp4'
-        subprocess.check_output(
-            'ffmpeg  -framerate 12 -f image2 -pattern_type sequence -i "' + self.crop_dir + 'frame%06d.jpg"  -s 720x540  -preset ultrafast ' + filmPathName, shell=True)
-
+        self.p = None
+     
     def getCurrentFrame(self):
         self.curFrameNo -= 1
         return self.getNextFrame()
@@ -344,4 +328,71 @@ class Film:
         else:
             self.curFrameNo = -1
             return None   
-     
+        
+    def cropAll(self, progress) :
+                frameNo = 0
+                os.chdir(self.scan_dir)
+                fileList = sorted(glob.glob('*.jpg'))
+                self.max_pic_num = len(fileList)
+                for fn in fileList:
+                    frame = Frame(os.path.join(self.scan_dir, fn))
+                    frame.cropPic()
+                    cv2.imwrite(os.path.join(self.crop_dir, f"frame{frameNo:06}.jpg"), frame.imageCropped)
+                    self.curFrameNo = frameNo
+                    if progress is not None:
+                        if progress(frame) == 0:
+                            break
+                    frameNo = frameNo+1
+                    
+    def makeFilm(self, filmName, progressReport, filmDone) :
+        self.progressReport = progressReport
+        self.filmDone = filmDone
+        os.chdir(self.crop_dir)
+        filmPathName = os.path.join(self.baseDir, filmName) + '.mp4'
+        if os.path.isfile(filmPathName):
+            os.remove(filmPathName)
+        # process = subprocess.Popen(
+        #     'ffmpeg  -framerate 12 -f image2 -pattern_type sequence -i "' + self.crop_dir + 'frame%06d.jpg"  -s 720x540  -preset ultrafast ' + filmPathName, 
+        #    stdout=subprocess.PIPE, shell=True)
+        
+        if self.p is None:  # No process running.
+            self.progressReport("Executing process")
+            self.p = QProcess()  # Keep a reference to the QProcess (e.g. on self) while it's running.
+            self.p.readyReadStandardOutput.connect(self.handle_stdout)
+            self.p.readyReadStandardError.connect(self.handle_stderr)
+            self.p.stateChanged.connect(self.handle_state)
+            self.p.finished.connect(self.process_finished)  # Clean up once complete.
+            self.p.start("ffmpeg", [
+                "-framerate", str(Film.Framerate), 
+                "-f", "image2",
+                "-pattern_type", "sequence",
+                "-i", self.crop_dir + "frame%06d.jpg",
+                "-s", Film.Resolution,
+                "-preset", "ultrafast", filmPathName
+                ])
+  
+ 
+    def handle_stderr(self):
+        data = self.p.readAllStandardError()
+        stderr = bytes(data).decode("utf8")
+        self.progressReport(stderr)
+
+    def handle_stdout(self):
+        data = self.p.readAllStandardOutput()
+        stdout = bytes(data).decode("utf8")
+        self.progressReport(stdout)
+
+    def handle_state(self, state):
+        states = {
+            QProcess.NotRunning: 'Not running',
+            QProcess.Starting: 'Starting',
+            QProcess.Running: 'Running',
+        }
+        state_name = states[state]
+        self.progressReport(f"State changed: {state_name}")
+
+    def process_finished(self):
+        self.progressReport("Process finished.")
+        self.filmDone()
+        self.p = None        
+
