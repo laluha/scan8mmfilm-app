@@ -4,7 +4,7 @@ Created on Sun Jan 15 18:45:07 2023
 
 @author: B
 """
-import os
+import os, fnmatch
 import cv2
 import random
 import glob
@@ -72,19 +72,23 @@ class Rect:
         return self.Y2 - self.Y1
     
     def adjX(self, adj):
-        self.X1 = self.X1 + adj
-        self.X2 = self.X2 + adj
-    
+        if self.X1 + adj >= 0 :
+            self.X1 = self.X1 + adj
+            self.X2 = self.X2 + adj
+
     def adjY(self, adj):
-        self.Y1 = self.Y1 + adj
-        self.Y2 = self.Y2 + adj
+        if self.Y1 + adj >= 0 :
+            self.Y1 = self.Y1 + adj
+            self.Y2 = self.Y2 + adj
         
     def adjXSize(self, adj):
-        self.X2 = self.X2 + adj
+        if self.X2 + adj > self.X1 :
+            self.X2 = self.X2 + adj
     
     def adjYSize(self, adj):
-        self.Y2 = self.Y2 + adj
-        
+        if self.Y2 + adj > self.Y1 :
+            self.Y2 = self.Y2 + adj 
+
 class Frame:
     ###
     # ysize = 534 #  needs to be adjusted to fit the picture
@@ -115,6 +119,7 @@ class Frame:
         return Frame.BLOB.X2 - Frame.BLOB.X1
           
     def __init__(self, imagePathName=None,*,image=None):
+        self.imagePathName = imagePathName
         if image is None and imagePathName is not None :
             self.imagePathName = imagePathName
             self.image = cv2.imread(imagePathName)
@@ -183,7 +188,7 @@ class Frame:
         wco = 220
         for i in range(128,256) :
             if hist[i] > okPct :
-                wco = i-6
+                wco = i-8 #6
                 break
         return wco        
       
@@ -243,10 +248,6 @@ class Frame:
         if dbg >= 2: print("cY=", self.cY, "oldcY=", oldcY, "blobState=", blobState)
         # if dbg >= 2:
             # ui = input("press return")   
-        p1 = (0, self.midy) 
-        p2 = (Frame.BLOB.X2-Frame.BLOB.X1, self.midy)
-        #print(p1, p2)
-        cv2.line(self.imageBlob, p1, p2, (0, 255, 255), 1) 
         p1 = (0, self.cY) 
         p2 = (Frame.BLOB.X2-Frame.BLOB.X1, self.cY)
         #print(p1, p2)
@@ -255,12 +256,21 @@ class Frame:
         p2 = (self.cX, Frame.BLOB.Y2-Frame.BLOB.Y1) 
         #print(p1, p2)
         cv2.line(self.imageBlob, p1, p2, (0, 255, 0), 3)
+        
+        #show target midy
+        p1 = (0, self.midy) 
+        p2 = (Frame.BLOB.X2-Frame.BLOB.X1, self.midy)
+        cv2.line(self.imageBlob, p1, p2, (0, 255, 0), 1)  # black line
+        p1 = (0, self.midy+1)
+        p2 = (Frame.BLOB.X2-Frame.BLOB.X1, self.midy+1)
+        cv2.line(self.imageBlob, p1, p2, (255, 255, 255), 1) # white line
+
         self.blobState = blobState
         return blobState
             
 class Film:
 
-    Resolution = "720x540"
+    Resolution = "920x540"
     Framerate = 12
     
     def __init__(self, name = "", baseDir = None):
@@ -271,8 +281,7 @@ class Film:
             self.baseDir = baseDir
         self.scan_dir = self.baseDir + "scan" + os.sep
         self.crop_dir = self.baseDir + "crop" + os.sep
-        self.max_pic_num = len([f for f in os.listdir(self.scan_dir) if 
-            os.path.isfile(os.path.join(self.scan_dir, f))])  # - number of files in scan directory
+        self.max_pic_num = len(self.getFileList())  # - number of *.jpg files in scan directory
         self.curFrameNo = -1
         self.p = None
      
@@ -281,8 +290,12 @@ class Film:
         return self.getNextFrame()
     
     def getFileList(self):
-        return sorted([f for f in os.listdir(self.scan_dir) if 
-                    os.path.isfile(os.path.join(self.scan_dir, f))])
+        list = [f for f in os.listdir(self.scan_dir) if 
+                    fnmatch.fnmatch(f, "*.jpg") and
+                    os.path.isfile(os.path.join(self.scan_dir, f))]
+        if len(list) > 1 :
+            return sorted(list)
+        return list
 
     def getRandomFrame(self):
         fileList = self.getFileList()
