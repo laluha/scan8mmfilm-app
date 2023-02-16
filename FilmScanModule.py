@@ -18,25 +18,29 @@ inifile = os.path.join(os.path.dirname(__file__),'scanner.ini')
 defaultBaseDir = "c:\\data\\film8\\" if os.sep == "\\" else "/home/pi/film8/"
 
 def loadConfig():
-    global defaultBaseDir
     config = configparser.ConfigParser()
     if len(config.read(inifile)) == 1:
         Frame.rect.load(config)
         Frame.whiteBox.load(config)
         Frame.BLOB.load(config)
         Frame.BLOB_MIN_AREA = config['BLOB'].getint('blob_min_area')
-        defaultBaseDir = config['PATHS']['filmdir']
+        Film.filmFolder = config['PATHS']['filmfolder']
+        Film.scanFolder = config['PATHS']['scanfolder']
+        Film.cropFolder = config['PATHS']['cropfolder']
     else:
         saveConfig()
     
 def saveConfig():
-    global defaultBaseDir
     config = configparser.ConfigParser()
     Frame.rect.save(config)
     Frame.whiteBox.save(config)
     Frame.BLOB.save(config)
     config['BLOB']['blob_min_area'] = str(Frame.BLOB_MIN_AREA) 
-    config['PATHS'] = { 'filmdir': defaultBaseDir }
+    if not config.has_section('PATHS'):
+            config['PATHS'] = {}
+    config['PATHS']['filmfolder'] = Film.filmFolder
+    config['PATHS']['scanfolder'] = Film.scanFolder
+    config['PATHS']['cropfolder'] = Film.cropFolder
     with open(inifile, 'w') as configfile:
        config.write(configfile)
        
@@ -270,18 +274,15 @@ class Frame:
             
 class Film:
 
-    Resolution = "920x540"
+    Resolution = "720x540"
     Framerate = 12
-    
-    def __init__(self, name = "", baseDir = None):
+    filmFolder = defaultBaseDir + "film" + os.sep
+    scanFolder = defaultBaseDir + "scan" + os.sep
+    cropFolder = defaultBaseDir + "crop" + os.sep
+
+    def __init__(self, name = ""):
         self.name = name
-        if baseDir == None:
-            self.baseDir = defaultBaseDir
-        else:
-            self.baseDir = baseDir
-        self.scan_dir = self.baseDir + "scan" + os.sep
-        self.crop_dir = self.baseDir + "crop" + os.sep
-        self.max_pic_num = len(self.getFileList())  # - number of *.jpg files in scan directory
+        self.scanFileCount = len(Film.getFileList(Film.scanFolder))  # - number of *.jpg files in scan directory
         self.curFrameNo = -1
         self.p = None
      
@@ -289,31 +290,71 @@ class Film:
         self.curFrameNo -= 1
         return self.getNextFrame()
     
-    def getFileList(self):
-        list = [f for f in os.listdir(self.scan_dir) if 
+    def getFileList(dir):
+        list = [f for f in os.listdir(dir) if 
                     fnmatch.fnmatch(f, "*.jpg") and
-                    os.path.isfile(os.path.join(self.scan_dir, f))]
+                    os.path.isfile(os.path.join(dir, f))]
         if len(list) > 1 :
             return sorted(list)
         return list
 
+    def getFileCount(dir):
+        n = 0
+        for f in os.listdir(dir):
+             if fnmatch.fnmatch(f, "*.jpg") and os.path.isfile(os.path.join(dir, f)):
+                n = n + 1
+        return n
+
+    def deleteFilesInFolder(dir):
+        for f in os.listdir(dir):
+             if fnmatch.fnmatch(f, "*.jpg") and os.path.isfile(os.path.join(dir, f)):
+                os.remove(os.path.join(dir, f))
+
+    def getCropCount():
+        return Film.getFileCount(Film.cropFolder)
+
+    def getScanCount():
+        return Film.getFileCount(Film.scanFolder)
+
     def getRandomFrame(self):
-        fileList = self.getFileList()
+        fileList = Film.getFileList(Film.scanFolder)
         cnt = len(fileList)
-        self.max_pic_num = cnt
+        self.scanFileCount = cnt
         if cnt > 0 :
             rn = random.randint(0,cnt-1)
-            randomf = os.path.join(self.scan_dir,fileList[rn])
+            randomf = os.path.join(Film.scanFolder,fileList[rn])
             self.curFrameNo = rn  
             return Frame(randomf)
         else:
             self.curFrameNo = -1
             return None
-        
-    def getNextFrame(self):
-        fileList = self.getFileList()
+
+    def getLastFrame(self):
+        fileList = Film.getFileList(Film.scanFolder)
         cnt = len(fileList)
-        self.max_pic_num = cnt
+        self.scanFileCount = cnt
+        if cnt > 0 :
+            self.curFrameNo = cnt-1
+            return Frame(os.path.join(Film.scanFolder,fileList[self.curFrameNo]))
+        else:
+            self.curFrameNo = -1
+            return None 
+
+    def getFirstFrame(self):
+        fileList = Film.getFileList(Film.scanFolder)
+        cnt = len(fileList)
+        self.scanFileCount = cnt
+        if cnt > 0 :
+            self.curFrameNo = 0
+            return Frame(os.path.join(Film.scanFolder,fileList[self.curFrameNo]))
+        else:
+            self.curFrameNo = -1
+            return None 
+
+    def getNextFrame(self):
+        fileList = Film.getFileList(Film.scanFolder)
+        cnt = len(fileList)
+        self.scanFileCount = cnt
         if cnt > 0 :
             if self.curFrameNo+1 >= cnt :
                 self.curFrameNo = cnt-1
@@ -321,15 +362,16 @@ class Film:
                 self.curFrameNo = self.curFrameNo+1
             else :
                 self.curFrameNo = 0
-            return Frame(os.path.join(self.scan_dir,fileList[self.curFrameNo]))
+            return Frame(os.path.join(Film.scanFolder,fileList[self.curFrameNo]))
         else:
             self.curFrameNo = -1
             return None   
 
     def getPreviousFrame(self):
-        fileList = self.getFileList()
+        self.getTargetFrame(self.curFrameNo-1)
+        fileList = Film.getFileList(Film.scanFolder)
         cnt = len(fileList)
-        self.max_pic_num = cnt
+        self.scanFileCount = cnt
         if cnt > 0 :
             if self.curFrameNo-1 >= cnt :
                 self.curFrameNo = cnt-1
@@ -337,36 +379,49 @@ class Film:
                 self.curFrameNo = self.curFrameNo-1
             else :
                 self.curFrameNo = 0
-            return Frame(os.path.join(self.scan_dir,fileList[self.curFrameNo]))
+            return Frame(os.path.join(Film.scanFolder,fileList[self.curFrameNo]))
         else:
             self.curFrameNo = -1
             return None   
-        
+
+    def getTargetFrame(self, target):
+        fileList = Film.getFileList(Film.scanFolder)
+        cnt = len(fileList)
+        self.scanFileCount = cnt
+        if cnt > 0 :
+            if target >= cnt :
+                self.curFrameNo = cnt-1
+            elif target >= 0 :
+                self.curFrameNo = target
+            else :
+                self.curFrameNo = 0
+            return Frame(os.path.join(Film.scanFolder,fileList[self.curFrameNo]))
+        else:
+            self.curFrameNo = -1
+            return None   
+
     def cropAll(self, progress) :
-                frameNo = 0
-                os.chdir(self.scan_dir)
-                fileList = sorted(glob.glob('*.jpg'))
-                self.max_pic_num = len(fileList)
-                for fn in fileList:
-                    frame = Frame(os.path.join(self.scan_dir, fn))
-                    frame.cropPic()
-                    cv2.imwrite(os.path.join(self.crop_dir, f"frame{frameNo:06}.jpg"), frame.imageCropped)
-                    self.curFrameNo = frameNo
-                    if progress is not None:
-                        if progress(frame) == 0:
-                            break
-                    frameNo = frameNo+1
+        frameNo = 0
+        os.chdir(Film.scanFolder)
+        fileList = sorted(glob.glob('*.jpg'))
+        self.scanFileCount = len(fileList)
+        for fn in fileList:
+            frame = Frame(os.path.join(Film.scanFolder, fn))
+            frame.cropPic()
+            cv2.imwrite(os.path.join(Film.cropFolder, f"frame{frameNo:06}.jpg"), frame.imageCropped)
+            self.curFrameNo = frameNo
+            if progress is not None:
+                if progress(frame) == 0:
+                    break
+            frameNo = frameNo+1
                     
     def makeFilm(self, filmName, progressReport, filmDone) :
         self.progressReport = progressReport
         self.filmDone = filmDone
-        os.chdir(self.crop_dir)
-        filmPathName = os.path.join(self.baseDir, filmName) + '.mp4'
+        os.chdir(Film.cropFolder)
+        filmPathName = os.path.join(Film.filmFolder, filmName) + '.mp4'
         if os.path.isfile(filmPathName):
             os.remove(filmPathName)
-        # process = subprocess.Popen(
-        #     'ffmpeg  -framerate 12 -f image2 -pattern_type sequence -i "' + self.crop_dir + 'frame%06d.jpg"  -s 720x540  -preset ultrafast ' + filmPathName, 
-        #    stdout=subprocess.PIPE, shell=True)
         
         if self.p is None:  # No process running.
             self.progressReport("Executing process")
@@ -379,7 +434,7 @@ class Film:
                 "-framerate", str(Film.Framerate), 
                 "-f", "image2",
                 "-pattern_type", "sequence",
-                "-i", self.crop_dir + "frame%06d.jpg",
+                "-i", Film.cropFolder + "frame%06d.jpg",
                 "-s", Film.Resolution,
                 "-preset", "ultrafast", filmPathName
                 ])

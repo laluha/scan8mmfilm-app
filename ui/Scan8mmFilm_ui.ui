@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>937</width>
-    <height>636</height>
+    <width>1039</width>
+    <height>640</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -69,7 +69,7 @@
        </widget>
       </item>
       <item>
-       <widget class="QCheckBox" name="chkMotorOn">
+       <widget class="QCheckBox" name="chkRewind">
         <property name="sizePolicy">
          <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
           <horstretch>0</horstretch>
@@ -77,7 +77,7 @@
          </sizepolicy>
         </property>
         <property name="text">
-         <string>Motor On</string>
+         <string>Rewind</string>
         </property>
        </widget>
       </item>
@@ -308,7 +308,7 @@
          <enum>QLayout::SetDefaultConstraint</enum>
         </property>
         <item row="1" column="1">
-         <widget class="QLabel" name="lblFrameNo">
+         <widget class="QLabel" name="lblScanInfo">
           <property name="text">
            <string/>
           </property>
@@ -332,7 +332,7 @@
          </widget>
         </item>
         <item row="0" column="1">
-         <widget class="QLabel" name="lblFrameCount">
+         <widget class="QLabel" name="lblCropInfo">
           <property name="text">
            <string/>
           </property>
@@ -426,8 +426,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>669</width>
-             <height>497</height>
+             <width>771</width>
+             <height>501</height>
             </rect>
            </property>
            <property name="sizePolicy">
@@ -436,12 +436,18 @@
              <verstretch>0</verstretch>
             </sizepolicy>
            </property>
+           <property name="minimumSize">
+            <size>
+             <width>400</width>
+             <height>300</height>
+            </size>
+           </property>
            <layout class="QHBoxLayout" name="horizontalLayout_4" stretch="0">
             <property name="spacing">
              <number>0</number>
             </property>
             <property name="sizeConstraint">
-             <enum>QLayout::SetMaximumSize</enum>
+             <enum>QLayout::SetMinimumSize</enum>
             </property>
             <property name="leftMargin">
              <number>0</number>
@@ -458,7 +464,7 @@
             <item>
              <widget class="QLabel" name="lblImage">
               <property name="sizePolicy">
-               <sizepolicy hsizetype="MinimumExpanding" vsizetype="Expanding">
+               <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
                 <horstretch>0</horstretch>
                 <verstretch>0</verstretch>
                </sizepolicy>
@@ -504,7 +510,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>937</width>
+     <width>1039</width>
      <height>26</height>
     </rect>
    </property>
@@ -512,10 +518,58 @@
     <property name="title">
      <string>Main</string>
     </property>
+    <addaction name="actionAbout"/>
+    <addaction name="actionExit"/>
+   </widget>
+   <widget class="QMenu" name="menuFile">
+    <property name="title">
+     <string>File</string>
+    </property>
+    <addaction name="actionSelect_Film_Folder"/>
+    <addaction name="actionSelect_Scan_Folder"/>
+    <addaction name="actionSelect_Crop_Folder"/>
+    <addaction name="actionClear_Scan_Folder"/>
+    <addaction name="actionClear_Crop_Folder"/>
    </widget>
    <addaction name="menuMain"/>
+   <addaction name="menuFile"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
+  <action name="actionAbout">
+   <property name="text">
+    <string>About</string>
+   </property>
+  </action>
+  <action name="actionExit">
+   <property name="text">
+    <string>Exit</string>
+   </property>
+  </action>
+  <action name="actionSelect_Film_Folder">
+   <property name="text">
+    <string>Select Film Folder</string>
+   </property>
+  </action>
+  <action name="actionSelect_Scan_Folder">
+   <property name="text">
+    <string>Select Scan Folder</string>
+   </property>
+  </action>
+  <action name="actionSelect_Crop_Folder">
+   <property name="text">
+    <string>Select Crop Folder</string>
+   </property>
+  </action>
+  <action name="actionClear_Scan_Folder">
+   <property name="text">
+    <string>Clear Scan Folder</string>
+   </property>
+  </action>
+  <action name="actionClear_Crop_Folder">
+   <property name="text">
+    <string>Clear Crop Folder</string>
+   </property>
+  </action>
  </widget>
  <tabstops>
   <tabstop>rbtnScan</tabstop>

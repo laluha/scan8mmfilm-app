@@ -10,6 +10,7 @@ from time import sleep
 import cv2
 import string
 from Scan8mmFilm_ui import Ui_MainWindow
+import os
 
 try:
     from picamera2 import Picamera2
@@ -46,7 +47,7 @@ class Window(QMainWindow, Ui_MainWindow):
         self.connectSignalsSlots()
         self.film = Film("")
         self.frame = None
-        self.lblFrameNo.setText("")
+        self.lblScanInfo.setText("")
         self.lblBlob.setMinimumWidth(Frame.getBlobWidth())
         self.adjustableRects = getAdjustableRects()
         for r in self.adjustableRects:
@@ -62,12 +63,13 @@ class Window(QMainWindow, Ui_MainWindow):
             self.rbtnCrop.setChecked(True)
             self.rbtnScan.setChecked(False)
             self.rbtnScan.setEnabled(False)
+        self.showCropCount()
 
     def connectSignalsSlots(self):
         if picamera2_present:
-            self.chkMotorOn.toggled.connect(self.motorModeChanged)
+            self.chkRewind.toggled.connect(self.rewindChanged)
         else:
-            self.chkMotorOn.setDisabled(True)
+            self.chkRewind.setDisabled(True)
         self.pbtnStart.clicked.connect(self.start)
         self.pbtnStop.clicked.connect(self.stop)
         self.pbtnUp.clicked.connect(self.up)
@@ -79,107 +81,89 @@ class Window(QMainWindow, Ui_MainWindow):
         self.pbtnPrevious.clicked.connect(self.previous)
         self.pbtnRandom.clicked.connect(self.random)
         self.pbtnMakeFilm.clicked.connect(self.makeFilm)
-        self.edlMinBlobArea.editingFinished.connect(self.MinBlobAreaChanged)
+        self.edlMinBlobArea.editingFinished.connect(self.minBlobAreaChanged)
         self.actionExit.triggered.connect(self.doClose)
         self.actionAbout.triggered.connect(self.about)
         if  picamera2_present:
             self.qpicamera2.done_signal.connect(self.capture_done)
 
+        self.actionSelect_Film_Folder.triggered.connect(self.selectFilmFolder)
+        self.actionSelect_Scan_Folder.triggered.connect(self.selectScanFolder)
+        self.actionSelect_Crop_Folder.triggered.connect(self.selectCropFolder)
+        self.actionClear_Scan_Folder.triggered.connect( self.clearScanFolder)
+        self.actionClear_Crop_Folder.triggered.connect( self.clearCropFolder)
 
-    def adjustableRectChanged(self, i):
-        self.adjRectIx = i
-        
-    def MinBlobAreaChanged(self):
-        minArea = int(self.edlMinBlobArea.text())
-        if minArea > 200 and minArea < 10000:
-            Frame.BLOB_MIN_AREA = minArea
-        
-    def motorModeChanged(self):
-        pass
-        #if self.chkMotorOn.isChecked() :
-        #    self.motorStart()
-        #else:
-        #    self.motorStop()
-            
-    def motorStart(self):
-        if self.rbtnScan.isChecked():
-            self.motorTicks = 0
-            self.timer.start(2000)
-            pidevi.startScanner()
-            pidevi.spoolStart()
-        else:
-            pidevi.rewind()
-    
-    def motorStop(self):
-        pidevi.spoolStop()
-        self.timer.stop()
-        
-    def motorTimeout(self) :
-        self.motorTicks = self.motorTicks + 1 
-        pidevi.spoolStart()
-        if self.motorTicks > 3 :
-            self.motorStop()
-        
-    def capture_done(self,job):
-        image = picam2.wait(job)
-        print("picture taken!")
-        sleep(0.5)
-        image = cv2.resize(image, (640, 480))
-        self.frame = Frame(image=image)
-        self.frame.calcCrop()
-        self.lblBlob.setPixmap(self.frame.getBlob())
-        self.showCropInfo(self.frame)
-        self.motorTicks = 0   
-        if self.scanDone :
-            self.setEnabledScanButtons(True)
-            
-    def scanFinished(self):
-        self.scanDone = True
-        self.setEnabledScanButtons(True)
-        self.motorStop()
-        
-    def setEnabledScanButtons(self, enab):
-        self.pbtnStart.setEnabled(enab)
-        self.pbtnUp.setEnabled(enab)
-        self.pbtnDown.setEnabled(enab)
-        self.pbtnNext.setEnabled(enab)
-        self.pbtnPrevious.setEnabled(enab)
-        
-        self.pbtnStop.setEnabled(not enab)
-        self.pbtnLeft.setEnabled(enab)
-        self.pbtnRight.setEnabled(enab)
-        self.rbtnScan.setEnabled(enab)
-        self.rbtnCrop.setEnabled(enab)
-        self.pbtnRandom.setEnabled(enab)
-        self.pbtnMakeFilm.setEnabled(enab)
+    # Menu actions --------------------------------------------------------------------------------------------
+
+    def selectFilmFolder(self):
+        dir = QtWidgets.QFileDialog.getExistingDirectory(caption="Select Film Folder", directory=os.path.commonpath([Film.filmFolder]))
+        if dir:
+            Film.filmFolder = os.path.abspath(dir)
+        os.path.commonpath
+
+    def selectScanFolder(self):
+        dir = QtWidgets.QFileDialog.getExistingDirectory(caption="Select Scan Folder", directory=os.path.commonpath([Film.scanFolder]))
+        if dir:
+            Film.scanFolder = os.path.abspath(dir)
+            self.lblScanInfo.setText(f"Frame count = {self.film.scanFileCount}")
+            self.lblScanFrame.setText(Film.scanFolder) 
+
+    def selectCropFolder(self):
+        dir = QtWidgets.QFileDialog.getExistingDirectory(caption="Select Crop Folder", directory=os.path.commonpath([Film.cropFolder]))
+        if dir:
+            Film.cropFolder = os.path.abspath(dir)
+            self.showCropCount()
+
+    def clearScanFolder(self):
+        button = QMessageBox.question(self, "Delete",  f"Delete all {Film.getScanCount()} .jpg files in {Film.scanFolder}?",QMessageBox.Yes|QMessageBox.No)
+        if button == QMessageBox.Yes:
+            Film.deleteFilesInFolder(Film.scanFolder)
+            self.lblScanInfo.setText(f"Frame count = {self.film.scanFileCount}")
+            self.lblScanFrame.setText(Film.scanFolder) 
        
-    def showCropInfo(self, frame):
-        Frame.rect.getYSize()
-        self.lblInfo1.setText(f"Frame W={Frame.rect.getXSize()} H={Frame.rect.getYSize()} cX={frame.cX} cY={frame.cY} ar={Frame.rect.getXSize()/Frame.rect.getYSize():.2f}")
-        self.lblInfo2.setText(f"Blob area={frame.area} bs={frame.blobState} Wcut={frame.ownWhiteCutoff}")
-        self.edlMinBlobArea.setText(str(Frame.BLOB_MIN_AREA))
+    def clearCropFolder(self):
+        button = QMessageBox.question(self, "Delete", f"Delete all {Film.getCropCount()} .jpg files in {Film.cropFolder}?",QMessageBox.Yes|QMessageBox.No)
+        if button == QMessageBox.Yes:
+            Film.deleteFilesInFolder(Film.cropFolder)
+            self.showCropCount()
 
-    def on_info(self, info, i, frame = None ):
-        self.lblFrameNo.setText(info)
-        self.motorTicks = 0
-        if frame is not None:
-            if self.lblImage.isVisible():
-                self.lblImage.setPixmap(frame.getCropped())
-            self.lblBlob.setPixmap(frame.getBlob())
-            self.showCropInfo(frame)
-                
-    def scanStateChange(self, info, i):
-        self.lblFrameNo.setText(info)
-        self.showInfo(info)
-        self.scanFinished()
+    def about(self):
+        QMessageBox.about(
+            self,
+            "Film Scanner App",
+            "<p>Built with:</p>"
+            "<p>- PyQt</p>"
+            "<p>- Qt Designer</p>"
+            "<p>- Python</p>",
+        )
 
-    def prepLblImage(self):
-        if self.horizontalLayout_4.SizeConstraint != QtWidgets.QLayout.SetMinimumSize :
-            self.horizontalLayout_4.setSizeConstraint(QtWidgets.QLayout.SetMinimumSize)
-            self.lblImage.clear()
-            # self.lblImage.setText("")
-            # self.lblImage.update()
- 
+    def doClose(self):
+        self.close()
+
+    # Button actions ---------------------------------------------------------------------------------------------------------------
+    
+    def modeChanged(self):
+        self.prepLblImage()
+        if self.rbtnScan.isChecked():
+            self.showInfo("Mode Scan")
+            if picamera2_present:            
+                self.lblImage.hide()
+                self.qpicamera2.show()
+            if self.frame is not None:
+                self.showScan()
+        else:
+            self.showInfo("Mode Crop")
+            self.showCropCount()
+            self.lblImage.show()
+            if picamera2_present:            
+                self.qpicamera2.hide() 
+            if self.frame is not None:
+                if self.frame.imagePathName is not None:
+                    self.refreshFrame()
+                else:
+                    self.frame = self.film.getNextFrame()
+                    self.showFrame()  
+
     def start(self):
         self.showInfo("start")
         self.prepLblImage()
@@ -194,7 +178,67 @@ class Window(QMainWindow, Ui_MainWindow):
                 self.startScanFilm()
         else:
             self.startCropAll()
+           
+    def stop(self):
+        self.showInfo("Stop")
+        try:
+            if self.rbtnScan.isChecked():
+                if picamera2_present:
+                    self.sigToScanTread.emit(0)
+                    self.threadScan.running = False
+                    sleep(0.2)
+                self.pbtnStart.setEnabled(True)
+            else:
+                self.sigToCropTread.emit(0)
+                self.threadCrop.running = False
+                sleep(0.2)
+                self.pbtnStart.setEnabled(True)
+        except:
+            pass
+    
+    def nnext(self):
+        self.showInfo("Next")
+        if self.rbtnScan.isChecked():
+            if picamera2_present: 
+                self.motorStart()
+                pidevi.stepCw(pidevi.step_count)
+                pidevi.spoolStart()
+                self.showBlob()
+        else:
+            self.frame = self.film.getNextFrame()
+            self.showFrame()
+
+    def previous(self):
+        self.showInfo("Previous")
+        if self.rbtnScan.isChecked():
+            if picamera2_present: 
+                self.motorStart()
+                pidevi.stepCcw(pidevi.step_count)
+                pidevi.spoolStart()
+                self.showBlob()
+        else:
+            self.frame = self.film.getPreviousFrame()
+            self.showFrame()
             
+    def random(self):
+        self.showInfo("Random")
+        self.frame = self.film.getRandomFrame()
+        self.showFrame()
+                                         
+    def makeFilm(self):
+        self.showInfo("Make Film")  
+        fileName = self.toValidFileName(self.edlFilmName.text())
+        if len(fileName) == 0 :
+            self.showInfo("Enter a valid filneme!")  
+        else:
+            self.pbtnMakeFilm.setEnabled(False)
+            self.horizontalLayout_4.setSizeConstraint(QtWidgets.QLayout.SetFixedSize)
+            self.lblImage.clear()
+            self.lblScanFrame.setText("")
+            self.film.name = fileName
+            self.messageText = ""
+            self.film.makeFilm(self.film.name, self.filmMessage, self.filmDone)
+        
     def down(self):
         if self.rbtnScan.isChecked():
             if picamera2_present:
@@ -238,118 +282,109 @@ class Window(QMainWindow, Ui_MainWindow):
             else:
                 self.adjustableRects[self.adjRectIx].adjXSize(1)
             self.refreshFrame()
-         
-    def showBlob(self): # ,"format": "RGB888"
-        if picamera2_present:
-            self.setEnabledScanButtons(False)
-            capture_config = picam2.create_still_configuration(main={"format": "RGB888","size": (1640, 1232)},transform=Transform(vflip=True,hflip=True))
-            #    image = 
-            picam2.switch_mode_and_capture_array(capture_config, "main", signal_function=self.qpicamera2.signal_done)
-         
-    def startCropAll(self):
-        self.lblScanFrame.setText("")
-        self.threadCrop = QThreadCrop(self.film)
-        self.sigToCropTread.connect(self.threadCrop.on_source)
-        self.sigToCropTread.emit(1) 
-        self.threadCrop.sigProgress.connect(self.on_info)
-        self.threadCrop.start()
-        self.pbtnStart.setEnabled(False)
 
-    def startScanFilm(self):
-        self.scanDone = False
-        self.pbtnStart.setEnabled(False)
-        self.lblScanFrame.setText("")
-        self.motorStart()
-        self.threadScan = QThreadScan(self.film)
-        self.sigToScanTread.connect(self.threadScan.on_source)
-        self.sigToScanTread.emit(1) 
-        self.threadScan.sigProgress.connect(self.on_info)
-        self.threadScan.sigStateChange.connect(self.scanStateChange)
-        self.threadScan.start()
-           
-    def stop(self):
-        self.showInfo("Stop")
-        try:
-            if self.rbtnScan.isChecked():
-                if picamera2_present:
-                    self.sigToScanTread.emit(0)
-                    self.threadScan.running = False
-                    sleep(0.2)
-                self.pbtnStart.setEnabled(True)
+    def adjustableRectChanged(self, i):
+        self.adjRectIx = i
+        
+    def minBlobAreaChanged(self):
+        minArea = int(self.edlMinBlobArea.text())
+        if minArea > 200 and minArea < 10000:
+            Frame.BLOB_MIN_AREA = minArea
+        
+    def rewindChanged(self):
+        if picamera2_present:
+            if self.chkRewind.isChecked():
+                pidevi.rewind()
             else:
-                self.sigToCropTread.emit(0)
-                self.threadCrop.running = False
-                sleep(0.2)
-                self.pbtnStart.setEnabled(True)
-        except:
-            pass
+                pidevi.spoolStop()
+            
+    # Process or timer actions ---------------------------------------------------------------------------------------------------------
+
+    def motorTimeout(self) :
+        self.motorTicks = self.motorTicks + 1 
+        pidevi.spoolStart()
+        if self.motorTicks > 3 :
+            self.motorStop()
+        
+    def capture_done(self,job):
+        image = picam2.wait(job)
+        print("picture taken!")
+        sleep(0.5)
+        image = cv2.resize(image, (640, 480))
+        self.frame = Frame(image=image)
+        self.frame.calcCrop()
+        self.lblBlob.setPixmap(self.frame.getBlob())
+        self.showCropInfo(self.frame)
+        self.motorTicks = 0   
+        if self.scanDone :
+            self.setEnabledScanButtons(True)
+            
+    def on_info(self, info, i, frame = None ):
+        self.lblScanInfo.setText(info)
+        self.motorTicks = 0
+        if frame is not None:
+            if self.lblImage.isVisible():
+                self.lblImage.setPixmap(frame.getCropped())
+            self.lblBlob.setPixmap(frame.getBlob())
+            self.showCropInfo(frame)
+
+    def cropStateChanged(self, info, i):
+        self.showCropCount()
+
+    def scanStateChange(self, info, i):
+        self.lblScanInfo.setText(info)
+        self.showInfo(info)
+        self.scanFinished()
+            
+    def filmMessage(self, s):
+        self.messageText = self.messageText + "\n" + s
+        self.lblImage.setText(self.messageText) 
+            
+    def filmDone(self):
+        self.pbtnMakeFilm.setEnabled(True)
     
-    def modeChanged(self):
-        self.prepLblImage()
-        if self.rbtnScan.isChecked():
-            self.showInfo("Mode Scan")
-            if picamera2_present:            
-                self.lblImage.hide()
-                self.qpicamera2.show()
-            if self.frame is not None:
-                self.showScan()
-        else:
-            self.showInfo("Mode Crop")
-            self.lblImage.show()
-            if picamera2_present:            
-                self.qpicamera2.hide() 
-            if self.frame is not None:
-                if self.frame.imagePathName is not None:
-                    self.refreshFrame()
-                else:
-                    self.frame = self.film.getNextFrame()
-                    self.showFrame()  
+    # Shared GUI control methods ------------------------------------------------------------------------------------------------------------------------------
+
+    def setEnabledScanButtons(self, enab):
+        self.pbtnStart.setEnabled(enab)
+        self.pbtnUp.setEnabled(enab)
+        self.pbtnDown.setEnabled(enab)
+        self.pbtnNext.setEnabled(enab)
+        self.pbtnPrevious.setEnabled(enab)
+        
+        self.pbtnStop.setEnabled(not enab)
+        self.pbtnLeft.setEnabled(enab)
+        self.pbtnRight.setEnabled(enab)
+        self.rbtnScan.setEnabled(enab)
+        self.rbtnCrop.setEnabled(enab)
+        self.pbtnRandom.setEnabled(enab)
+        self.pbtnMakeFilm.setEnabled(enab)
+                
+    def scanFinished(self):
+        self.scanDone = True
+        self.setEnabledScanButtons(True)
+        self.motorStop()
+
+    # Shared GUI update methods ---------------------------------------------------------------------------------------------------------------------------     
+
+    def showCropCount(self):
+        self.lblCropInfo = f"Cropped frame count {Film.getCropCount()}"
 
     def refreshFrame(self):
         self.frame = Frame(self.frame.imagePathName)
         self.showFrame()
-
-    
-    def nnext(self):
-        self.showInfo("Next")
-        if self.rbtnScan.isChecked():
-            if picamera2_present: 
-                self.motorStart()
-                pidevi.stepCw(pidevi.step_count)
-                pidevi.spoolStart()
-                self.showBlob()
-        else:
-            self.frame = self.film.getNextFrame()
-            self.showFrame()
-
-    def previous(self):
-        self.showInfo("Previous")
-        if self.rbtnScan.isChecked():
-            if picamera2_present: 
-                self.motorStart()
-                pidevi.stepCcw(pidevi.step_count)
-                pidevi.spoolStart()
-                self.showBlob()
-        else:
-            self.frame = self.film.getPreviousFrame()
-            self.showFrame()
-            
-    def random(self):
-        self.showInfo("Random")
-        self.frame = self.film.getRandomFrame()
-        self.showFrame()
-        
+  
     def showFrame(self):
-        self.lblFrameCount.setText(f"Number of scanned frames = {self.film.max_pic_num}")
         if self.frame is not None:
-            self.lblFrameNo.setText(f"Current frame no = {self.film.curFrameNo}")
+            self.lblScanInfo.setText(f"Frame {self.film.curFrameNo} of {self.film.scanFileCount}")
             self.lblScanFrame.setText(self.frame.imagePathName)       
             if self.rbtnScan.isChecked():
                 self.showScan()
             else:
                 self.showCrop() 
         else:
-            self.lblScanFrame.setText(self.film.scan_dir) 
+            self.lblScanInfo.setText(f"Frame count = {self.film.scanFileCount}")
+            self.lblScanFrame.setText(Film.scanFolder) 
         
     def showScan(self):
         if picamera2_present:  
@@ -371,48 +406,69 @@ class Window(QMainWindow, Ui_MainWindow):
     def showInfo(self,text):
         self.statusbar.showMessage(text)
 
-    def about(self):
-        QMessageBox.about(
-            self,
-            "Film Scanner App",
-            "<p>Built with:</p>"
-            "<p>- PyQt</p>"
-            "<p>- Qt Designer</p>"
-            "<p>- Python</p>",
-        )
+    def showCropInfo(self, frame):    
+        self.lblInfo1.setText(f"Frame W={Frame.rect.getXSize()} H={Frame.rect.getYSize()} cX={frame.cX} cY={frame.cY} ar={Frame.rect.getXSize()/Frame.rect.getYSize():.2f}")
+        self.lblInfo2.setText(f"Blob area={frame.area} bs={frame.blobState} Wcut={frame.ownWhiteCutoff}")
+        self.edlMinBlobArea.setText(str(Frame.BLOB_MIN_AREA))
 
-    def doClose(self):
-        self.close()
+    def prepLblImage(self):
+        if self.horizontalLayout_4.SizeConstraint != QtWidgets.QLayout.SetMinimumSize :
+            self.horizontalLayout_4.setSizeConstraint(QtWidgets.QLayout.SetMinimumSize)
+            self.lblImage.clear()
+            # self.lblImage.setText("")
+            # self.lblImage.update()
+ 
+    def showBlob(self): # ,"format": "RGB888"
+        if picamera2_present:
+            self.setEnabledScanButtons(False)
+            capture_config = picam2.create_still_configuration(main={"format": "RGB888","size": (1640, 1232)},transform=Transform(vflip=True,hflip=True))
+            #    image = 
+            picam2.switch_mode_and_capture_array(capture_config, "main", signal_function=self.qpicamera2.signal_done)
 
-# =============================================================================
-    def message(self, s):
-        self.messageText = self.messageText + "\n" + s
-        self.lblImage.setText(self.messageText)  
-           
+    # Shared device control ---------------------------------------------------------------------------------------------------------------------------------------
+    
+    def motorStart(self):
+        if self.rbtnScan.isChecked():
+            self.motorTicks = 0
+            self.timer.start(2000)
+            pidevi.startScanner()
+            pidevi.spoolStart()
+
+    def motorStop(self):
+        pidevi.spoolStop()
+        self.timer.stop()
+         
+    def startCropAll(self):
+        self.lblScanFrame.setText("")
+        self.threadCrop = QThreadCrop(self.film)
+        self.sigToCropTread.connect(self.threadCrop.on_source)
+        self.sigToCropTread.emit(1) 
+        self.threadCrop.sigProgress.connect(self.on_info)
+        self.threadCrop.start()
+        self.pbtnStart.setEnabled(False)
+
+    def startScanFilm(self):
+        self.scanDone = False
+        self.pbtnStart.setEnabled(False)
+        self.lblScanFrame.setText("")
+        self.motorStart()
+        self.threadScan = QThreadScan(self.film)
+        self.sigToScanTread.connect(self.threadScan.on_source)
+        self.sigToScanTread.emit(1) 
+        self.threadScan.sigProgress.connect(self.on_info)
+        self.threadScan.sigStateChange.connect(self.scanStateChange)
+        self.threadScan.start()
+
+    # Shared utility methods -----------------------------------------------------------------------------------------------
+         
     def toValidFileName(self, s):
         valid_chars = "-_() %s%s" % (string.ascii_letters, string.digits)
         filename = ''.join(c for c in s if c in valid_chars)
         filename = filename.replace(' ','_') # I don't like spaces in filenames.
         return filename    
-                                     
-    def makeFilm(self):
-        self.showInfo("Make Film")  
-        fileName = self.toValidFileName(self.edlFilmName.text())
-        if len(fileName) == 0 :
-            self.showInfo("Enter a valid filneme!")  
-        else:
-            self.pbtnMakeFilm.setEnabled(False)
-            self.horizontalLayout_4.setSizeConstraint(QtWidgets.QLayout.SetFixedSize)
-            self.lblImage.clear()
-            self.lblScanFrame.setText("")
-            self.film.name = fileName
-            self.messageText = ""
-            self.film.makeFilm(self.film.name, self.message, self.filmDone)
-            
-    def filmDone(self):
-        self.pbtnMakeFilm.setEnabled(True)
-        
-# =============================================================================
+
+# Thread =============================================================================
+
 class QThreadCrop(QtCore.QThread):
     sigProgress = pyqtSignal(str, int, Frame)
     
@@ -441,7 +497,9 @@ class QThreadCrop(QtCore.QThread):
             print("QThreadScan", err)
             
         self.running = False
-# =============================================================================
+
+# Thread =============================================================================
+
 class QThreadScan(QtCore.QThread):
     sigProgress = pyqtSignal(str, int, Frame)
     sigStateChange = pyqtSignal(str, int)
@@ -452,7 +510,7 @@ class QThreadScan(QtCore.QThread):
         self.cmd = 1 # go
         self.midy = Frame.midy
         self.tolerance = 6
-        self.frameNo = film.max_pic_num
+        self.frameNo = film.scanFileCount
         
     def on_source(self, cmd):
         self.cmd = cmd
@@ -487,7 +545,7 @@ class QThreadScan(QtCore.QThread):
                     sleep(.2)  
 
                 if (self.frame.cY <= self.midy + self.tolerance) and (self.frame.cY >= self.midy - self.tolerance):
-                    imgname = self.film.scan_dir + 'scan' + ' - ' + format(self.frameNo, '06') + '.jpg'              
+                    imgname = Film.scanFolder + 'scan' + ' - ' + format(self.frameNo, '06') + '.jpg'              
                     request = picam2.capture_request()
                     request.save("main", imgname)
                     print("imgname", imgname)
@@ -506,6 +564,7 @@ class QThreadScan(QtCore.QThread):
             
         self.running = False
         self.sigStateChange.emit("Done", -1)
+
 # =============================================================================
 
 if __name__ == "__main__":
@@ -520,5 +579,5 @@ if __name__ == "__main__":
     except:
         if  picamera2_present:
             pidevi.cleanup()
-        saveConfig()
-        sys.exit(0)
+    saveConfig()
+    sys.exit(0)
