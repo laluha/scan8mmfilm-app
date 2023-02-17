@@ -45,25 +45,15 @@ class Window(QMainWindow, Ui_MainWindow):
             self.qpicamera2 = QGlPicamera2(picam2, width=800, height=600, keep_ar=True)
             self.horizontalLayout_4.addWidget(self.qpicamera2)
         self.connectSignalsSlots()
-        self.film = Film("")
-        self.frame = None
-        self.lblScanInfo.setText("")
         self.lblBlob.setMinimumWidth(Frame.getBlobWidth())
         self.adjustableRects = getAdjustableRects()
         for r in self.adjustableRects:
             self.comboBox.addItem(r.name)
         self.adjRectIx = 0
         self.comboBox.currentIndexChanged.connect(self.adjustableRectChanged)
-        if picamera2_present:
-            self.timer = QTimer()
-            self.timer.timeout.connect(self.motorTimeout)
-            self.scanDone = True
-            self.showBlob()
-        else:
-            self.rbtnCrop.setChecked(True)
-            self.rbtnScan.setChecked(False)
-            self.rbtnScan.setEnabled(False)
-        self.showCropCount()
+        self.doLblImagePrep = False
+
+        QTimer.singleShot(100, self.initScanner)
 
     def connectSignalsSlots(self):
         if picamera2_present:
@@ -105,36 +95,35 @@ class Window(QMainWindow, Ui_MainWindow):
         dir = QtWidgets.QFileDialog.getExistingDirectory(caption="Select Scan Folder", directory=os.path.commonpath([Film.scanFolder]))
         if dir:
             Film.scanFolder = os.path.abspath(dir)
-            self.lblScanInfo.setText(f"Frame count = {self.film.scanFileCount}")
-            self.lblScanFrame.setText(Film.scanFolder) 
+            self.initScanner()
 
     def selectCropFolder(self):
         dir = QtWidgets.QFileDialog.getExistingDirectory(caption="Select Crop Folder", directory=os.path.commonpath([Film.cropFolder]))
         if dir:
             Film.cropFolder = os.path.abspath(dir)
-            self.showCropCount()
+            self.updateInfoPanel()
 
     def clearScanFolder(self):
         button = QMessageBox.question(self, "Delete",  f"Delete all {Film.getScanCount()} .jpg files in {Film.scanFolder}?",QMessageBox.Yes|QMessageBox.No)
         if button == QMessageBox.Yes:
             Film.deleteFilesInFolder(Film.scanFolder)
-            self.lblScanInfo.setText(f"Frame count = {self.film.scanFileCount}")
-            self.lblScanFrame.setText(Film.scanFolder) 
+            self.initScanner()
        
     def clearCropFolder(self):
         button = QMessageBox.question(self, "Delete", f"Delete all {Film.getCropCount()} .jpg files in {Film.cropFolder}?",QMessageBox.Yes|QMessageBox.No)
         if button == QMessageBox.Yes:
             Film.deleteFilesInFolder(Film.cropFolder)
-            self.showCropCount()
+            self.updateInfoPanel()
 
     def about(self):
         QMessageBox.about(
             self,
-            "Film Scanner App",
+            "8mm Film Scanner App",
             "<p>Built with:</p>"
-            "<p>- PyQt</p>"
+            "<p>- PyQt5</p>"
             "<p>- Qt Designer</p>"
-            "<p>- Python</p>",
+            "<p>- Python 3.9</p>"
+            "<p>- OpenCV</p>",
         )
 
     def doClose(self):
@@ -144,25 +133,26 @@ class Window(QMainWindow, Ui_MainWindow):
     
     def modeChanged(self):
         self.prepLblImage()
+        self.enableButtons()
         if self.rbtnScan.isChecked():
             self.showInfo("Mode Scan")
             if picamera2_present:            
                 self.lblImage.hide()
                 self.qpicamera2.show()
+            if self.frame is None:
+                self.frame = self.film.getFirstFrame()
             if self.frame is not None:
                 self.showScan()
         else:
             self.showInfo("Mode Crop")
-            self.showCropCount()
             self.lblImage.show()
             if picamera2_present:            
                 self.qpicamera2.hide() 
-            if self.frame is not None:
-                if self.frame.imagePathName is not None:
-                    self.refreshFrame()
-                else:
-                    self.frame = self.film.getNextFrame()
-                    self.showFrame()  
+            if self.frame is not None and self.frame.imagePathName is not None:
+                self.refreshFrame()
+            else:
+                self.frame = self.film.getFirstFrame()
+                self.showFrame()  
 
     def start(self):
         self.showInfo("start")
@@ -187,12 +177,11 @@ class Window(QMainWindow, Ui_MainWindow):
                     self.sigToScanTread.emit(0)
                     self.threadScan.running = False
                     sleep(0.2)
-                self.pbtnStart.setEnabled(True)
             else:
                 self.sigToCropTread.emit(0)
                 self.threadCrop.running = False
                 sleep(0.2)
-                self.pbtnStart.setEnabled(True)
+            self.enableButtons(busy=False)
         except:
             pass
     
@@ -200,6 +189,7 @@ class Window(QMainWindow, Ui_MainWindow):
         self.showInfo("Next")
         if self.rbtnScan.isChecked():
             if picamera2_present: 
+                self.enableButtons(busy=True)  
                 self.motorStart()
                 pidevi.stepCw(pidevi.step_count)
                 pidevi.spoolStart()
@@ -212,6 +202,7 @@ class Window(QMainWindow, Ui_MainWindow):
         self.showInfo("Previous")
         if self.rbtnScan.isChecked():
             if picamera2_present: 
+                self.enableButtons(busy=True)  
                 self.motorStart()
                 pidevi.stepCcw(pidevi.step_count)
                 pidevi.spoolStart()
@@ -231,8 +222,9 @@ class Window(QMainWindow, Ui_MainWindow):
         if len(fileName) == 0 :
             self.showInfo("Enter a valid filneme!")  
         else:
-            self.pbtnMakeFilm.setEnabled(False)
+            self.enableButtons(busy=True)
             self.horizontalLayout_4.setSizeConstraint(QtWidgets.QLayout.SetFixedSize)
+            self.doLblImagePrep = True
             self.lblImage.clear()
             self.lblScanFrame.setText("")
             self.film.name = fileName
@@ -242,6 +234,7 @@ class Window(QMainWindow, Ui_MainWindow):
     def down(self):
         if self.rbtnScan.isChecked():
             if picamera2_present:
+                self.enableButtons(busy=True)  
                 self.motorStart()
                 pidevi.stepCcw(2)
                 pidevi.spoolStart()
@@ -256,6 +249,7 @@ class Window(QMainWindow, Ui_MainWindow):
     def up(self):
         if self.rbtnScan.isChecked():
             if picamera2_present:
+                self.enableButtons(busy=True)  
                 self.motorStart()
                 pidevi.stepCw(2)  
                 pidevi.spoolStart()
@@ -314,61 +308,123 @@ class Window(QMainWindow, Ui_MainWindow):
         self.frame = Frame(image=image)
         self.frame.calcCrop()
         self.lblBlob.setPixmap(self.frame.getBlob())
-        self.showCropInfo(self.frame)
+        self.updateInfoPanel()
         self.motorTicks = 0   
         if self.scanDone :
-            self.setEnabledScanButtons(True)
+            self.enableButtons(busy=False)
             
-    def on_info(self, info, i, frame = None ):
+    def scanProgress(self, info, i, frame ):
         self.lblScanInfo.setText(info)
-        self.motorTicks = 0
+        self.motorTicks = 0   
         if frame is not None:
             if self.lblImage.isVisible():
                 self.lblImage.setPixmap(frame.getCropped())
             self.lblBlob.setPixmap(frame.getBlob())
-            self.showCropInfo(frame)
+            self.frame = frame
 
-    def cropStateChanged(self, info, i):
-        self.showCropCount()
+    def cropProgress(self, info, i, frame):
+        self.lblCropInfo.setText(info)
+        if frame is not None:
+            if self.lblImage.isVisible():
+                self.lblImage.setPixmap(frame.getCropped())
+            self.lblBlob.setPixmap(frame.getBlob())
+            self.frame = frame
+
+    def cropStateChange(self, info, i):
+        self.updateInfoPanel()        
+        self.showInfo(info)
+        self.enableButtons(busy=False)
 
     def scanStateChange(self, info, i):
-        self.lblScanInfo.setText(info)
+        self.updateInfoPanel()
         self.showInfo(info)
-        self.scanFinished()
+        self.scanDone = True
+        self.enableButtons(busy=False)
+        self.motorStop()
             
     def filmMessage(self, s):
         self.messageText = self.messageText + "\n" + s
         self.lblImage.setText(self.messageText) 
             
     def filmDone(self):
-        self.pbtnMakeFilm.setEnabled(True)
+        self.enableButtons(busy=False)
     
     # Shared GUI control methods ------------------------------------------------------------------------------------------------------------------------------
 
-    def setEnabledScanButtons(self, enab):
-        self.pbtnStart.setEnabled(enab)
-        self.pbtnUp.setEnabled(enab)
-        self.pbtnDown.setEnabled(enab)
-        self.pbtnNext.setEnabled(enab)
-        self.pbtnPrevious.setEnabled(enab)
+    def enableButtons(self, *, busy=False):
+        idle = not busy
+        pi = picamera2_present
+        scan = self.rbtnScan.isChecked()
+        crop = self.rbtnCrop.isChecked()
+        frame = self.frame is not None # True if scan folder has frames
+
+        self.pbtnStart.setEnabled(idle and (scan or frame))
+        self.pbtnStop.setEnabled(busy)
+        self.pbtnMakeFilm.setEnabled(idle and crop and frame)
+
+        self.pbtnNext.setEnabled(idle and (pi or (crop and frame)))
+        self.pbtnPrevious.setEnabled(idle and (pi or (crop and frame)))
+        self.pbtnRandom.setEnabled(idle and crop and frame)
         
-        self.pbtnStop.setEnabled(not enab)
-        self.pbtnLeft.setEnabled(enab)
-        self.pbtnRight.setEnabled(enab)
-        self.rbtnScan.setEnabled(enab)
-        self.rbtnCrop.setEnabled(enab)
-        self.pbtnRandom.setEnabled(enab)
-        self.pbtnMakeFilm.setEnabled(enab)
-                
-    def scanFinished(self):
-        self.scanDone = True
-        self.setEnabledScanButtons(True)
-        self.motorStop()
+        self.pbtnUp.setEnabled(idle and (pi or (crop and frame)))
+        self.pbtnDown.setEnabled(idle and (pi or (crop and frame)))
+        self.pbtnLeft.setEnabled(idle and crop and frame)
+        self.pbtnRight.setEnabled(idle and crop and frame)
+
+        self.rbtnScan.setEnabled(idle and pi)
+        self.rbtnCrop.setEnabled(idle)
+        
+        self.pbtnMakeFilm.setEnabled(idle and crop and frame)
+        self.chkRewind.setEnabled(pi and crop)
+        self.menuFile.setEnabled(idle)
+        self.edlFilmName.setEnabled(idle)
+
+        self.comboBox.setEnabled(idle and crop and frame)
+        self.rbtnPosition.setEnabled(idle and crop and frame)
+        self.rbtnSize.setEnabled(idle and crop and frame)
 
     # Shared GUI update methods ---------------------------------------------------------------------------------------------------------------------------     
 
-    def showCropCount(self):
-        self.lblCropInfo = f"Cropped frame count {Film.getCropCount()}"
+    def initScanner(self):
+        self.film = Film("")
+        self.frame = None
+        self.lblImage.clear()
+        self.lblBlob.clear()
+        if picamera2_present:
+            self.timer = QTimer()
+            self.timer.timeout.connect(self.motorTimeout)
+            self.scanDone = True
+            # Start in Scan mode
+            if self.rbtnScan.isChecked():
+                self.modeChanged() # was set - force action
+            else:
+                self.rbtnScan.setChecked(True)
+        else:
+            # Start in Crop Mode
+            if self.rbtnCrop.isChecked():
+                self.modeChanged() # was set - force action
+            else:
+                self.rbtnCrop.setChecked(True) 
+        self.enableButtons(busy=False)
+
+
+    def updateInfoPanel(self):
+        self.lblCropInfo.setText(f"Cropped frame count {Film.getCropCount()}")
+        self.edlMinBlobArea.setText(str(Frame.BLOB_MIN_AREA))
+        if self.frame is not None:
+            frame = self.frame
+            self.lblScanInfo.setText(f"Frame {self.film.curFrameNo} of {self.film.scanFileCount}")
+            if self.frame.imagePathName is None:
+                self.lblScanFrame.setText(Film.scanFolder)
+            else:
+                self.lblScanFrame.setText(self.frame.imagePathName)       
+            self.lblInfo1.setText(f"Frame W={Frame.rect.getXSize()} H={Frame.rect.getYSize()} cX={frame.cX} cY={frame.cY} ar={Frame.rect.getXSize()/Frame.rect.getYSize():.2f}")
+            self.lblInfo2.setText(f"Blob area={frame.area} bs={frame.blobState} Wcut={frame.ownWhiteCutoff}")
+        else:
+            self.lblScanInfo.setText(f"Frame count = {self.film.scanFileCount}")
+            self.lblScanFrame.setText(Film.scanFolder) 
+            self.lblInfo1.setText("")
+            self.lblInfo2.setText("")
 
     def refreshFrame(self):
         self.frame = Frame(self.frame.imagePathName)
@@ -376,53 +432,39 @@ class Window(QMainWindow, Ui_MainWindow):
   
     def showFrame(self):
         if self.frame is not None:
-            self.lblScanInfo.setText(f"Frame {self.film.curFrameNo} of {self.film.scanFileCount}")
-            self.lblScanFrame.setText(self.frame.imagePathName)       
             if self.rbtnScan.isChecked():
                 self.showScan()
             else:
                 self.showCrop() 
-        else:
-            self.lblScanInfo.setText(f"Frame count = {self.film.scanFileCount}")
-            self.lblScanFrame.setText(Film.scanFolder) 
+        self.updateInfoPanel()
         
     def showScan(self):
         if picamera2_present:  
             self.showBlob()
         else:
             self.prepLblImage()
-            self.lblImage.setPixmap(self.frame.getQPixmap(self.scrollArea) ) #self.lblImage.contentsRect()))
-        # self.lblBlob.setPixmap(None)
-        self.lblInfo1.setText("")
-        self.lblInfo2.setText("")
+            self.lblImage.setPixmap(self.frame.getQPixmap(self.scrollAreaWidgetContents) ) #self.lblImage.contentsRect()))
         self.lblBlob.update()
         
     def showCrop(self):
         self.prepLblImage()
-        self.lblImage.setPixmap(self.frame.getCropOutline(self.scrollArea) ) #self.lblImage.contentsRect()))
+        self.lblImage.setPixmap(self.frame.getCropOutline(self.scrollAreaWidgetContents) ) #self.lblImage.contentsRect()))
         self.lblBlob.setPixmap(self.frame.getBlob())
-        self.showCropInfo(self.frame)
     
     def showInfo(self,text):
         self.statusbar.showMessage(text)
 
-    def showCropInfo(self, frame):    
-        self.lblInfo1.setText(f"Frame W={Frame.rect.getXSize()} H={Frame.rect.getYSize()} cX={frame.cX} cY={frame.cY} ar={Frame.rect.getXSize()/Frame.rect.getYSize():.2f}")
-        self.lblInfo2.setText(f"Blob area={frame.area} bs={frame.blobState} Wcut={frame.ownWhiteCutoff}")
-        self.edlMinBlobArea.setText(str(Frame.BLOB_MIN_AREA))
-
     def prepLblImage(self):
-        if self.horizontalLayout_4.SizeConstraint != QtWidgets.QLayout.SetMinimumSize :
+        if self.doLblImagePrep and self.horizontalLayout_4.SizeConstraint != QtWidgets.QLayout.SetMinimumSize :
             self.horizontalLayout_4.setSizeConstraint(QtWidgets.QLayout.SetMinimumSize)
             self.lblImage.clear()
-            # self.lblImage.setText("")
-            # self.lblImage.update()
+            elf.doLblImagePrep = False
  
     def showBlob(self): # ,"format": "RGB888"
         if picamera2_present:
-            self.setEnabledScanButtons(False)
+            self.enableButtons(busy=True)
             capture_config = picam2.create_still_configuration(main={"format": "RGB888","size": (1640, 1232)},transform=Transform(vflip=True,hflip=True))
-            #    image = 
+            # This causes a call to capture_done when done 
             picam2.switch_mode_and_capture_array(capture_config, "main", signal_function=self.qpicamera2.signal_done)
 
     # Shared device control ---------------------------------------------------------------------------------------------------------------------------------------
@@ -439,23 +481,28 @@ class Window(QMainWindow, Ui_MainWindow):
         self.timer.stop()
          
     def startCropAll(self):
+        self.enableButtons(busy=True)
         self.lblScanFrame.setText("")
+        self.lblInfo1.setText("")
+        self.lblInfo2.setText("")
         self.threadCrop = QThreadCrop(self.film)
         self.sigToCropTread.connect(self.threadCrop.on_source)
         self.sigToCropTread.emit(1) 
-        self.threadCrop.sigProgress.connect(self.on_info)
+        self.threadCrop.sigProgress.connect(self.cropProgress)
+        self.threadCrop.sigStateChange.connect(self.cropStateChange)
         self.threadCrop.start()
-        self.pbtnStart.setEnabled(False)
 
     def startScanFilm(self):
         self.scanDone = False
-        self.pbtnStart.setEnabled(False)
+        self.enableButtons(busy=True)
         self.lblScanFrame.setText("")
+        self.lblInfo1.setText("")
+        self.lblInfo2.setText("")
         self.motorStart()
         self.threadScan = QThreadScan(self.film)
         self.sigToScanTread.connect(self.threadScan.on_source)
         self.sigToScanTread.emit(1) 
-        self.threadScan.sigProgress.connect(self.on_info)
+        self.threadScan.sigProgress.connect(self.scanProgress)
         self.threadScan.sigStateChange.connect(self.scanStateChange)
         self.threadScan.start()
 
@@ -471,6 +518,7 @@ class Window(QMainWindow, Ui_MainWindow):
 
 class QThreadCrop(QtCore.QThread):
     sigProgress = pyqtSignal(str, int, Frame)
+    sigStateChange = pyqtSignal(str, int)
     
     def __init__(self, film, parent=None):
         QtCore.QThread.__init__(self, parent)
@@ -490,12 +538,12 @@ class QThreadCrop(QtCore.QThread):
 
         try:
             self.film.cropAll(self.progress)
-
             sleep(1)    
         except Exception as err:
-            # self.sigProgress.emit(str(err), 0, 1)
+            self.sigStateChange.emit(str(err), -2)
             print("QThreadScan", err)
             
+        self.sigStateChange.emit("Done", -1)
         self.running = False
 
 # Thread =============================================================================
