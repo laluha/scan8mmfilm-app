@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1011</width>
-    <height>644</height>
+    <width>1029</width>
+    <height>642</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -15,22 +15,10 @@
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="1,10">
-    <property name="sizeConstraint">
-     <enum>QLayout::SetDefaultConstraint</enum>
-    </property>
     <item>
-     <layout class="QVBoxLayout" name="verticalLayout">
-      <property name="sizeConstraint">
-       <enum>QLayout::SetNoConstraint</enum>
-      </property>
-      <property name="leftMargin">
-       <number>0</number>
-      </property>
+     <layout class="QVBoxLayout" name="verticalLayout_1">
       <property name="topMargin">
-       <number>7</number>
-      </property>
-      <property name="rightMargin">
-       <number>6</number>
+       <number>5</number>
       </property>
       <item>
        <widget class="QGroupBox" name="gboxScanCrop">
@@ -43,190 +31,202 @@
         <property name="minimumSize">
          <size>
           <width>100</width>
-          <height>80</height>
+          <height>86</height>
          </size>
         </property>
         <property name="maximumSize">
          <size>
-          <width>103</width>
-          <height>16777215</height>
+          <width>120</width>
+          <height>86</height>
          </size>
         </property>
         <property name="title">
          <string>Operation mode</string>
         </property>
-        <widget class="QRadioButton" name="rbtnCrop">
-         <property name="geometry">
-          <rect>
-           <x>24</x>
-           <y>50</y>
-           <width>71</width>
-           <height>20</height>
-          </rect>
+        <layout class="QVBoxLayout" name="verticalLayout">
+         <property name="spacing">
+          <number>6</number>
          </property>
-         <property name="text">
-          <string>Crop</string>
+         <property name="leftMargin">
+          <number>8</number>
          </property>
-        </widget>
-        <widget class="QRadioButton" name="rbtnScan">
-         <property name="geometry">
-          <rect>
-           <x>24</x>
-           <y>24</y>
-           <width>71</width>
-           <height>20</height>
-          </rect>
+         <property name="topMargin">
+          <number>3</number>
          </property>
-         <property name="text">
-          <string>Scan</string>
+         <property name="rightMargin">
+          <number>7</number>
          </property>
-         <property name="checked">
-          <bool>true</bool>
+         <property name="bottomMargin">
+          <number>2</number>
          </property>
-        </widget>
+         <item>
+          <widget class="QRadioButton" name="rbtnScan">
+           <property name="text">
+            <string>Scan</string>
+           </property>
+           <property name="checked">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QRadioButton" name="rbtnCrop">
+           <property name="text">
+            <string>Crop</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
        </widget>
       </item>
       <item>
-       <widget class="QCheckBox" name="chkRewind">
-        <property name="sizePolicy">
-         <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
-          <horstretch>0</horstretch>
-          <verstretch>0</verstretch>
-         </sizepolicy>
+       <layout class="QVBoxLayout" name="verticalLayout_Buttons">
+        <property name="leftMargin">
+         <number>9</number>
         </property>
-        <property name="text">
-         <string>Rewind</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QPushButton" name="pbtnStart">
-        <property name="minimumSize">
-         <size>
-          <width>100</width>
-          <height>0</height>
-         </size>
-        </property>
-        <property name="maximumSize">
-         <size>
-          <width>100</width>
-          <height>16777215</height>
-         </size>
-        </property>
-        <property name="text">
-         <string>Start</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QPushButton" name="pbtnStop">
-        <property name="enabled">
-         <bool>true</bool>
-        </property>
-        <property name="minimumSize">
-         <size>
-          <width>100</width>
-          <height>0</height>
-         </size>
-        </property>
-        <property name="maximumSize">
-         <size>
-          <width>100</width>
-          <height>16777215</height>
-         </size>
-        </property>
-        <property name="text">
-         <string>Stop</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QPushButton" name="pbtnMakeFilm">
-        <property name="minimumSize">
-         <size>
-          <width>100</width>
-          <height>0</height>
-         </size>
-        </property>
-        <property name="maximumSize">
-         <size>
-          <width>100</width>
-          <height>16777215</height>
-         </size>
-        </property>
-        <property name="text">
-         <string>Make Film</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QPushButton" name="pbtnNext">
-        <property name="minimumSize">
-         <size>
-          <width>100</width>
-          <height>0</height>
-         </size>
-        </property>
-        <property name="maximumSize">
-         <size>
-          <width>100</width>
-          <height>16777215</height>
-         </size>
-        </property>
-        <property name="text">
-         <string>Next</string>
-        </property>
-        <property name="autoRepeat">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QPushButton" name="pbtnPrevious">
-        <property name="minimumSize">
-         <size>
-          <width>100</width>
-          <height>0</height>
-         </size>
-        </property>
-        <property name="maximumSize">
-         <size>
-          <width>100</width>
-          <height>16777215</height>
-         </size>
-        </property>
-        <property name="text">
-         <string>Previous</string>
-        </property>
-        <property name="autoRepeat">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QPushButton" name="pbtnRandom">
-        <property name="minimumSize">
-         <size>
-          <width>100</width>
-          <height>0</height>
-         </size>
-        </property>
-        <property name="maximumSize">
-         <size>
-          <width>100</width>
-          <height>16777215</height>
-         </size>
-        </property>
-        <property name="text">
-         <string>Random</string>
-        </property>
-        <property name="autoRepeat">
-         <bool>true</bool>
-        </property>
-        <property name="autoRepeatInterval">
-         <number>1000</number>
-        </property>
-       </widget>
+        <item>
+         <widget class="QCheckBox" name="chkRewind">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="text">
+           <string>Rewind</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="pbtnStart">
+          <property name="minimumSize">
+           <size>
+            <width>100</width>
+            <height>0</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>100</width>
+            <height>16777215</height>
+           </size>
+          </property>
+          <property name="text">
+           <string>Start</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="pbtnStop">
+          <property name="enabled">
+           <bool>true</bool>
+          </property>
+          <property name="minimumSize">
+           <size>
+            <width>100</width>
+            <height>0</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>100</width>
+            <height>16777215</height>
+           </size>
+          </property>
+          <property name="text">
+           <string>Stop</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="pbtnMakeFilm">
+          <property name="minimumSize">
+           <size>
+            <width>100</width>
+            <height>0</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>100</width>
+            <height>16777215</height>
+           </size>
+          </property>
+          <property name="text">
+           <string>Make Film</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="pbtnNext">
+          <property name="minimumSize">
+           <size>
+            <width>100</width>
+            <height>0</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>100</width>
+            <height>16777215</height>
+           </size>
+          </property>
+          <property name="text">
+           <string>Next</string>
+          </property>
+          <property name="autoRepeat">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="pbtnPrevious">
+          <property name="minimumSize">
+           <size>
+            <width>100</width>
+            <height>0</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>100</width>
+            <height>16777215</height>
+           </size>
+          </property>
+          <property name="text">
+           <string>Previous</string>
+          </property>
+          <property name="autoRepeat">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="pbtnRandom">
+          <property name="minimumSize">
+           <size>
+            <width>100</width>
+            <height>0</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>100</width>
+            <height>16777215</height>
+           </size>
+          </property>
+          <property name="text">
+           <string>Random</string>
+          </property>
+          <property name="autoRepeat">
+           <bool>true</bool>
+          </property>
+          <property name="autoRepeatInterval">
+           <number>1000</number>
+          </property>
+         </widget>
+        </item>
+       </layout>
       </item>
       <item>
        <widget class="QGroupBox" name="gboxAdjust">
@@ -241,13 +241,13 @@
         </property>
         <property name="minimumSize">
          <size>
-          <width>101</width>
+          <width>120</width>
           <height>230</height>
          </size>
         </property>
         <property name="maximumSize">
          <size>
-          <width>100</width>
+          <width>120</width>
           <height>16777215</height>
          </size>
         </property>
@@ -283,7 +283,7 @@
         </property>
         <layout class="QVBoxLayout" name="verticalLayout_4">
          <property name="leftMargin">
-          <number>4</number>
+          <number>2</number>
          </property>
          <property name="topMargin">
           <number>0</number>
@@ -300,13 +300,13 @@
             <enum>QLayout::SetDefaultConstraint</enum>
            </property>
            <property name="leftMargin">
-            <number>0</number>
+            <number>9</number>
            </property>
            <property name="topMargin">
             <number>7</number>
            </property>
            <property name="rightMargin">
-            <number>0</number>
+            <number>8</number>
            </property>
            <item>
             <widget class="QComboBox" name="comboBox">
@@ -409,8 +409,8 @@
         </property>
         <property name="sizeHint" stdset="0">
          <size>
-          <width>20</width>
-          <height>40</height>
+          <width>117</width>
+          <height>13</height>
          </size>
         </property>
        </spacer>
@@ -543,8 +543,8 @@
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>751</width>
-             <height>505</height>
+             <width>755</width>
+             <height>503</height>
             </rect>
            </property>
            <property name="sizePolicy">
@@ -627,7 +627,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1011</width>
+     <width>1029</width>
      <height>26</height>
     </rect>
    </property>
@@ -691,8 +691,6 @@
  <tabstops>
   <tabstop>rbtnScan</tabstop>
   <tabstop>rbtnCrop</tabstop>
-  <tabstop>pbtnStart</tabstop>
-  <tabstop>pbtnStop</tabstop>
  </tabstops>
  <resources/>
  <connections/>
