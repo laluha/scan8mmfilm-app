@@ -45,7 +45,7 @@ class Window(QMainWindow, Ui_MainWindow):
             self.qpicamera2 = QGlPicamera2(picam2, width=800, height=600, keep_ar=True)
             self.horizontalLayout_4.addWidget(self.qpicamera2)
         self.connectSignalsSlots()
-        self.lblBlob.setMinimumWidth(Frame.getBlobWidth())
+        self.lblHoleCrop.setMinimumWidth(Frame.getHoleCropWidth())
         self.adjustableRects = getAdjustableRects()
         for r in self.adjustableRects:
             self.comboBox.addItem(r.name)
@@ -71,7 +71,7 @@ class Window(QMainWindow, Ui_MainWindow):
         self.pbtnPrevious.clicked.connect(self.previous)
         self.pbtnRandom.clicked.connect(self.random)
         self.pbtnMakeFilm.clicked.connect(self.makeFilm)
-        self.edlMinBlobArea.editingFinished.connect(self.minBlobAreaChanged)
+        self.edlMinHoleArea.editingFinished.connect(self.minHoleAreaChanged)
         self.actionExit.triggered.connect(self.doClose)
         self.actionAbout.triggered.connect(self.about)
         if  picamera2_present:
@@ -191,7 +191,7 @@ class Window(QMainWindow, Ui_MainWindow):
                 self.motorStart()
                 pidevi.stepCw(pidevi.step_count)
                 pidevi.spoolStart()
-                self.showBlob()
+                self.showHoleCrop()
         else:
             self.frame = self.film.getNextFrame()
             self.showFrame()
@@ -204,7 +204,7 @@ class Window(QMainWindow, Ui_MainWindow):
                 self.motorStart()
                 pidevi.stepCcw(pidevi.step_count)
                 pidevi.spoolStart()
-                self.showBlob()
+                self.showHoleCrop()
         else:
             self.frame = self.film.getPreviousFrame()
             self.showFrame()
@@ -236,7 +236,7 @@ class Window(QMainWindow, Ui_MainWindow):
                 self.motorStart()
                 pidevi.stepCcw(2)
                 pidevi.spoolStart()
-                self.showBlob()
+                self.showHoleCrop()
         else:
             if self.rbtnPosition.isChecked() :
                 self.adjustableRects[self.adjRectIx].adjY(1)
@@ -251,7 +251,7 @@ class Window(QMainWindow, Ui_MainWindow):
                 self.motorStart()
                 pidevi.stepCw(2)  
                 pidevi.spoolStart()
-                self.showBlob()
+                self.showHoleCrop()
         else:
             if self.rbtnPosition.isChecked() :
                 self.adjustableRects[self.adjRectIx].adjY(-1)
@@ -278,10 +278,10 @@ class Window(QMainWindow, Ui_MainWindow):
     def adjustableRectChanged(self, i):
         self.adjRectIx = i
         
-    def minBlobAreaChanged(self):
-        minArea = int(self.edlMinBlobArea.text())
+    def minHoleAreaChanged(self):
+        minArea = int(self.edlMinHoleArea.text())
         if minArea > 200 and minArea < 10000:
-            Frame.BLOB_MIN_AREA = minArea
+            Frame.holeMinArea = minArea
         
     def rewindChanged(self):
         if picamera2_present:
@@ -305,7 +305,7 @@ class Window(QMainWindow, Ui_MainWindow):
         image = cv2.resize(image, (640, 480))
         self.frame = Frame(image=image)
         self.frame.calcCrop()
-        self.lblBlob.setPixmap(self.frame.getBlob())
+        self.lblHoleCrop.setPixmap(self.frame.getHoleCrop())
         self.updateInfoPanel()
         self.motorTicks = 0   
         if self.scanDone :
@@ -317,7 +317,7 @@ class Window(QMainWindow, Ui_MainWindow):
         if frame is not None:
             if self.lblImage.isVisible():
                 self.lblImage.setPixmap(frame.getCropped())
-            self.lblBlob.setPixmap(frame.getBlob())
+            self.lblHoleCrop.setPixmap(frame.getHoleCrop())
             self.frame = frame
 
     def cropProgress(self, info, i, frame):
@@ -325,7 +325,7 @@ class Window(QMainWindow, Ui_MainWindow):
         if frame is not None:
             if self.lblImage.isVisible():
                 self.lblImage.setPixmap(frame.getCropped())
-            self.lblBlob.setPixmap(frame.getBlob())
+            self.lblHoleCrop.setPixmap(frame.getHoleCrop())
             self.frame = frame
 
     def cropStateChange(self, info, i):
@@ -387,7 +387,7 @@ class Window(QMainWindow, Ui_MainWindow):
         self.film = Film("")
         self.frame = None
         self.lblImage.clear()
-        self.lblBlob.clear()
+        self.lblHoleCrop.clear()
         if picamera2_present:
             self.timer = QTimer()
             self.timer.timeout.connect(self.motorTimeout)
@@ -408,7 +408,7 @@ class Window(QMainWindow, Ui_MainWindow):
 
     def updateInfoPanel(self):
         self.lblCropInfo.setText(f"Cropped frame count {Film.getCropCount()}")
-        self.edlMinBlobArea.setText(str(Frame.BLOB_MIN_AREA))
+        self.edlMinHoleArea.setText(str(Frame.holeMinArea))
         if self.frame is not None:
             frame = self.frame
             self.lblScanInfo.setText(f"Frame {self.film.curFrameNo} of {self.film.scanFileCount}")
@@ -416,9 +416,9 @@ class Window(QMainWindow, Ui_MainWindow):
                 self.lblScanFrame.setText(Film.scanFolder)
             else:
                 self.lblScanFrame.setText(self.frame.imagePathName)       
-            self.lblInfo1.setText(f"Frame W={Frame.rect.getXSize()} H={Frame.rect.getYSize()} cX={frame.cX} cY={frame.cY} ar={Frame.rect.getXSize()/Frame.rect.getYSize():.2f}")
+            self.lblInfo1.setText(f"Frame W={Frame.frameCrop.getXSize()} H={Frame.frameCrop.getYSize()} cX={frame.cX} cY={frame.cY} ar={Frame.frameCrop.getXSize()/Frame.frameCrop.getYSize():.2f}")
             if frame.area is not None:
-                self.lblInfo2.setText(f"Blob area={frame.area} bs={frame.blobState} Wcut={frame.ownWhiteCutoff}")
+                self.lblInfo2.setText(f"Hole area={frame.area} res={frame.locateHoleResult} whiteTrsh={frame.ownWhiteTreshold}")
         else:
             self.lblScanInfo.setText(f"Frame count = {self.film.scanFileCount}")
             self.lblScanFrame.setText(Film.scanFolder) 
@@ -442,16 +442,16 @@ class Window(QMainWindow, Ui_MainWindow):
         
     def showScan(self):
         if picamera2_present:  
-            self.showBlob()
+            self.showHoleCrop()
         else:
             self.prepLblImage()
             self.lblImage.setPixmap(self.frame.getQPixmap(self.scrollAreaWidgetContents) ) #self.lblImage.contentsRect()))
-        self.lblBlob.update()
+        self.lblHoleCrop.update()
         
     def showCrop(self):
         self.prepLblImage()
         self.lblImage.setPixmap(self.frame.getCropOutline(self.scrollAreaWidgetContents) ) #self.lblImage.contentsRect()))
-        self.lblBlob.setPixmap(self.frame.getBlob())
+        self.lblHoleCrop.setPixmap(self.frame.getHoleCrop())
     
     def showInfo(self,text):
         self.statusbar.showMessage(text)
@@ -462,7 +462,7 @@ class Window(QMainWindow, Ui_MainWindow):
             self.lblImage.clear()
             elf.doLblImagePrep = False
  
-    def showBlob(self): # ,"format": "RGB888"
+    def showHoleCrop(self): # ,"format": "RGB888"
         if picamera2_present:
             self.enableButtons(busy=True)
             capture_config = picam2.create_still_configuration(main={"format": "RGB888","size": (1640, 1232)},transform=Transform(vflip=True,hflip=True))
@@ -568,7 +568,7 @@ class QThreadScan(QtCore.QThread):
     def run(self):
         self.running = True
         pidevi.startScanner()
-        self.blobState = 0
+        self.locateHoleResult = 0
         
         while self.cmd == 1 :
             try:
@@ -576,10 +576,10 @@ class QThreadScan(QtCore.QThread):
                 capture_config = picam2.create_still_configuration(main={"format": "RGB888","size": (1640, 1232)},transform=Transform(vflip=True,hflip=True))
                 image = picam2.switch_mode_and_capture_array(capture_config, "main") #, signal_function=self.qpicamera2.signal_done)
                 self.frame = Frame(image=image)
-                blobState = self.frame.find_blob(Frame.BLOB_MIN_AREA)
-                if blobState != 0 :
+                locateHoleResult = self.frame.locateSprocketHole(Frame.holeMinArea)
+                if locateHoleResult != 0 :
                     self.cmd = 0
-                    self.blobState = blobState
+                    self.locateHoleResult = locateHoleResult
                     break
                 tolstep = 2
                 
@@ -612,7 +612,7 @@ class QThreadScan(QtCore.QThread):
             
         self.running = False
         if self.cmd == 0:
-            self.sigStateChange.emit("Done", self.blobState)
+            self.sigStateChange.emit("Done", self.locateHoleResult)
 
 # =============================================================================
 

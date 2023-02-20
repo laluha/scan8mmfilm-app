@@ -20,78 +20,78 @@ defaultBaseDir = "c:\\data\\film8" if os.sep == "\\" else "/home/pi/film8"
 def loadConfig():
     config = configparser.ConfigParser()
     if len(config.read(inifile)) == 1:
-        Frame.rect.load(config)
-        Frame.whiteBox.load(config)
-        Frame.BLOB.load(config)
-        Frame.BLOB_MIN_AREA = config['BLOB'].getint('blob_min_area')
-        Film.filmFolder = config['PATHS']['filmfolder']
-        Film.scanFolder = config['PATHS']['scanfolder']
-        Film.cropFolder = config['PATHS']['cropfolder']
+        Frame.frameCrop.load(config)
+        Frame.whiteCrop.load(config)
+        Frame.holeCrop.load(config)
+        Frame.holeMinArea = config['holeCrop'].getint('holeMinArea')
+        Film.filmFolder = config['paths']['filmFolder']
+        Film.scanFolder = config['paths']['scanFolder']
+        Film.cropFolder = config['paths']['cropFolder']
     else:
         saveConfig()
     
 def saveConfig():
     config = configparser.ConfigParser()
-    Frame.rect.save(config)
-    Frame.whiteBox.save(config)
-    Frame.BLOB.save(config)
-    config['BLOB']['blob_min_area'] = str(Frame.BLOB_MIN_AREA) 
-    if not config.has_section('PATHS'):
-            config['PATHS'] = {}
-    config['PATHS']['filmfolder'] = Film.filmFolder
-    config['PATHS']['scanfolder'] = Film.scanFolder
-    config['PATHS']['cropfolder'] = Film.cropFolder
+    Frame.frameCrop.save(config)
+    Frame.whiteCrop.save(config)
+    Frame.holeCrop.save(config)
+    config['holeCrop']['holeMinArea'] = str(Frame.holeMinArea) 
+    if not config.has_section('paths'):
+            config['paths'] = {}
+    config['paths']['filmFolder'] = Film.filmFolder
+    config['paths']['scanFolder'] = Film.scanFolder
+    config['paths']['cropFolder'] = Film.cropFolder
     with open(inifile, 'w') as configfile:
        config.write(configfile)
        
 def getAdjustableRects():
-    return [Frame.rect, Frame.BLOB, Frame.whiteBox]
+    return [Frame.frameCrop, Frame.holeCrop, Frame.whiteCrop]
 
 class Rect:
     def __init__(self, name, x1, y1, x2, y2):
         self.name = name
-        self.X1 = x1
-        self.Y1 = y1
-        self.X2 = x2
-        self.Y2 = y2
+        self.x1 = x1
+        self.y1 = y1
+        self.x2 = x2
+        self.y2 = y2
         
     def load(self, config):
-        self.X1 = config[self.name].getint('x1')
-        self.X2 = config[self.name].getint('x2')
-        self.Y1 = config[self.name].getint('y1')
-        self.Y2 = config[self.name].getint('y2')
+        self.x1 = config[self.name].getint('x1')
+        self.x2 = config[self.name].getint('x2')
+        self.y1 = config[self.name].getint('y1')
+        self.y2 = config[self.name].getint('y2')
 
     def save(self, config):
         if not config.has_section(self.name):
             config[self.name] = {}
-        config[self.name]['x1'] = str(self.X1)
-        config[self.name]['x2'] = str(self.X2)
-        config[self.name]['y1'] = str(self.Y1) 
-        config[self.name]['y2'] = str(self.Y2)
+        config[self.name]['x1'] = str(self.x1)
+        config[self.name]['x2'] = str(self.x2)
+        config[self.name]['y1'] = str(self.y1) 
+        config[self.name]['y2'] = str(self.y2)
 
     def getXSize(self):
-        return self.X2 - self.X1
+        return self.x2 - self.x1
     
     def getYSize(self):
-        return self.Y2 - self.Y1
+        return self.y2 - self.y1
     
     def adjX(self, adj):
-        if self.X1 + adj >= 0 :
-            self.X1 = self.X1 + adj
-            self.X2 = self.X2 + adj
+        if self.x1 + adj >= 0 :
+            self.x1 = self.x1 + adj
+            self.x2 = self.x2 + adj
 
     def adjY(self, adj):
-        if self.Y1 + adj >= 0 :
-            self.Y1 = self.Y1 + adj
-            self.Y2 = self.Y2 + adj
+        if self.y1 + adj >= 0 :
+            self.y1 = self.y1 + adj
+            self.y2 = self.y2 + adj
         
     def adjXSize(self, adj):
-        if self.X2 + adj > self.X1 :
-            self.X2 = self.X2 + adj
+        if self.x2 + adj > self.x1 :
+            self.x2 = self.x2 + adj
     
     def adjYSize(self, adj):
-        if self.Y2 + adj > self.Y1 :
-            self.Y2 = self.Y2 + adj 
+        if self.y2 + adj > self.y1 :
+            self.y2 = self.y2 + adj 
 
 class Frame:
     ###
@@ -99,28 +99,28 @@ class Frame:
     # xsize = 764 
         
     # Top image edgeY = holeCenterY + imageBlackFrame thickness
-    # ycal = 30 # 34 + 267 # 534/2 # 500 calibrate camera frame y position 0=center of blob 
+    # ycal = 30 # 34 + 267 # 534/2 # 500 calibrate camera frame y position 0=center of hole 
     
-    # Left image edgeX = holeCenterX + holeW/2: 377 + 288/2 = (BLOB.X1 + cX) *ScaleFactor + holeW/2
+    # Left image edgeX = holeCenterX + holeW/2: 377 + 288/2 = (holeCrop.x1 + cX) *ScaleFactor + holeW/2
     # xcal = 144 
     ###
     
     midx = 64
     midy = 136 
     
-    rect = Rect("FRAME", 144, 30, 144+764, 30+534)
+    frameCrop = Rect("frameCrop", 144, 30, 144+764, 30+534)
 
-    whiteBox = Rect("white_box", 544, 130, 544+12, 110+130)
+    whiteCrop = Rect("whiteCrop", 544, 130, 544+12, 110+130)
 
-    BLOB = Rect("BLOB", 90, 0, 240, 276)  
-    BLOB_MIN_AREA = 4000 # 4000  
+    holeCrop = Rect("holeCrop", 90, 0, 240, 276)  
+    holeMinArea = 4000 # 4000  
         
     ScaleFactor = 1640.0/640  
         
-    whiteCutoff = 220
+    whiteTreshold = 220
     
-    def getBlobWidth():
-        return Frame.BLOB.X2 - Frame.BLOB.X1
+    def getHoleCropWidth():
+        return Frame.holeCrop.x2 - Frame.holeCrop.x1
           
     def __init__(self, imagePathName=None,*,image=None):
         self.imagePathName = imagePathName
@@ -136,8 +136,8 @@ class Frame:
         # cY is used to position a film frame at scan position
         self.cY = Frame.midy    
         
-        self.blobState = 1
-        self.ownWhiteCutoff = Frame.whiteCutoff
+        self.locateHoleResult = 1
+        self.ownWhiteTreshold = Frame.whiteTreshold
         self.area = 0
         
         
@@ -159,22 +159,22 @@ class Frame:
     def getCropped(self, dest=None):
         return self.convert_cv_qt(self.imageCropped, dest)
         
-    def getBlob(self) :
-        return self.convert_cv_qt(self.imageBlob)
+    def getHoleCrop(self) :
+        return self.convert_cv_qt(self.imageHoleCrop)
 
     def calcCrop(self):
-        self.blobState = self.find_blob(Frame.BLOB_MIN_AREA)
+        self.locateHoleResult = self.locateSprocketHole(Frame.holeMinArea)
         
-        x = int((self.cX + Frame.BLOB.X1) * Frame.ScaleFactor)+Frame.rect.X1
-        y = int(self.cY * Frame.ScaleFactor)+Frame.rect.Y1 
+        x = int((self.cX + Frame.holeCrop.x1) * Frame.ScaleFactor)+Frame.frameCrop.x1
+        y = int(self.cY * Frame.ScaleFactor)+Frame.frameCrop.y1 
         self.p1 = (x, y)
-        self.p2 = (x+Frame.rect.getXSize(), y+Frame.rect.getYSize())
+        self.p2 = (x+Frame.frameCrop.getXSize(), y+Frame.frameCrop.getYSize())
         
     def getCropOutline(self, dest=None):
         self.calcCrop()
         cv2.rectangle(self.image, self.p1, self.p2, (0, 255, 0), 10)
-        wp1 = (round(Frame.whiteBox.X1 * Frame.ScaleFactor), round(Frame.whiteBox.Y1 * Frame.ScaleFactor))
-        wp2 = (round(Frame.whiteBox.X2 * Frame.ScaleFactor), round(Frame.whiteBox.Y2 * Frame.ScaleFactor))
+        wp1 = (round(Frame.whiteCrop.x1 * Frame.ScaleFactor), round(Frame.whiteCrop.y1 * Frame.ScaleFactor))
+        wp2 = (round(Frame.whiteCrop.x2 * Frame.ScaleFactor), round(Frame.whiteCrop.y2 * Frame.ScaleFactor))
         cv2.rectangle(self.image, wp1, wp2, (60, 240, 240), 10)
         return self.convert_cv_qt(self.image, dest)
         
@@ -182,14 +182,14 @@ class Frame:
         self.calcCrop()
         self.imageCropped = self.image[self.p1[1]:self.p2[1], self.p1[0]:self.p2[0]]
      
-    def getWhiteCutoff(self, imageSmall):
-        img = imageSmall[Frame.whiteBox.Y1:Frame.whiteBox.Y2, Frame.whiteBox.X1:Frame.whiteBox.X2]
+    def getWhiteThreshold(self, imageSmall):
+        img = imageSmall[Frame.whiteCrop.y1:Frame.whiteCrop.y2, Frame.whiteCrop.x1:Frame.whiteCrop.x2]
         img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         planes = cv2.split(img)
         histSize = 256 #  [Establish the number of bins]
         histRange = (0, 256) # Set the range
         hist = cv2.calcHist(planes, [0], None, [histSize], histRange, accumulate=False)    
-        okPct = (Frame.whiteBox.Y2-Frame.whiteBox.Y1)*(Frame.whiteBox.X2-Frame.whiteBox.X1)/100.0*5
+        okPct = (Frame.whiteCrop.y2-Frame.whiteCrop.y1)*(Frame.whiteCrop.x2-Frame.whiteCrop.x1)/100.0*5
         wco = 220
         for i in range(128,256) :
             if hist[i] > okPct :
@@ -197,24 +197,24 @@ class Frame:
                 break
         return wco        
       
-    # area size has to be set to identify the sprocket hole blob
+    # area size has to be set to identify the sprocket hole
     # if the sprocket hole area is around 2500, then 2000 should be a safe choice
     # the area size will trigger the exit from the loop
     
-    def find_blob(self, area_size):
+    def locateSprocketHole(self, area_size):
         self.imageSmall = cv2.resize(self.image, (640, 480))
         # the image crop with the sprocket hole 
-        img = self.imageSmall[Frame.BLOB.Y1:Frame.BLOB.Y2, Frame.BLOB.X1:Frame.BLOB.X2]
+        img = self.imageSmall[Frame.holeCrop.y1:Frame.holeCrop.y2, Frame.holeCrop.x1:Frame.holeCrop.x2]
         img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        self.ownWhiteCutoff = self.getWhiteCutoff(self.imageSmall)
-        ret, self.imageBlob = cv2.threshold(img, self.ownWhiteCutoff, 255, 0) # 220 # 200,255,0
-        contours, hierarchy = cv2.findContours(self.imageBlob, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+        self.ownWhiteTreshold = self.getWhiteThreshold(self.imageSmall)
+        ret, self.imageHoleCrop = cv2.threshold(img, self.ownWhiteTreshold, 255, 0) # 220 # 200,255,0
+        contours, hierarchy = cv2.findContours(self.imageHoleCrop, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
         # RETR_LIST: retrieves all of the contours without establishing any hierarchical relationships.
         # CHAIN_APPROX_SIMPLE: compresses horizontal, vertical, and diagonal segments and leaves only 
         # their end points. For example, an up-right rectangular contour is encoded with 4 points.
         
         lenContours = len(contours)
-        blobState = 1 
+        locateHoleResult = 1 
         oldcX = self.cX
         oldcY = self.cY
         self.area = area_size
@@ -224,54 +224,54 @@ class Frame:
             if dbg >= 1 :
                 print((l, area))
             if area > area_size:
-                blobState = 0 # blob found
+                locateHoleResult = 0 # hole found
                 self.area = area
                 # print("found")
                 # print("area=", area)
                 break
-        if blobState == 0:      
+        if locateHoleResult == 0:      
             M = cv2.moments(cnt)
             #print(M)
             try:
                 self.cX = int(M["m10"] / M["m00"])
                 self.cY = int(M["m01"] / M["m00"])
-                #blobDist = 225
-                #if cY > blobDist : # distance between blobs
+                #holeDist = 225
+                #if cY > holeDist : # distance between holes
                 #    print("cY=", cY)
-                #    blobState = 2 # 2. blob found
-                #    cY = cY - blobDist
+                #    locateHoleResult = 2 # 2. hole found
+                #    cY = cY - holeDist
             except ZeroDivisionError:
                 if dbg >= 2: print("no center")
-                blobState = 3 # no center
+                locateHoleResult = 3 # no center
                 self.cX = oldcX
                 self.cY = oldcY # midy
         else :
-            if dbg >= 2: print("no blob")
-            blobState = 1
+            if dbg >= 2: print("no hole located")
+            locateHoleResult = 1
             self.cX = oldcX
             self.cY = oldcY        
-        if dbg >= 2: print("cY=", self.cY, "oldcY=", oldcY, "blobState=", blobState)
+        if dbg >= 2: print("cY=", self.cY, "oldcY=", oldcY, "locateHoleResult=", locateHoleResult)
         # if dbg >= 2:
             # ui = input("press return")   
         p1 = (0, self.cY) 
-        p2 = (Frame.BLOB.X2-Frame.BLOB.X1, self.cY)
+        p2 = (Frame.holeCrop.x2-Frame.holeCrop.x1, self.cY)
         #print(p1, p2)
-        cv2.line(self.imageBlob, p1, p2, (0, 255, 0), 3)
+        cv2.line(self.imageHoleCrop, p1, p2, (0, 255, 0), 3)
         p1 = (self.cX, 0) 
-        p2 = (self.cX, Frame.BLOB.Y2-Frame.BLOB.Y1) 
+        p2 = (self.cX, Frame.holeCrop.y2-Frame.holeCrop.y1) 
         #print(p1, p2)
-        cv2.line(self.imageBlob, p1, p2, (0, 255, 0), 3)
+        cv2.line(self.imageHoleCrop, p1, p2, (0, 255, 0), 3)
         
         #show target midy
         p1 = (0, self.midy) 
-        p2 = (Frame.BLOB.X2-Frame.BLOB.X1, self.midy)
-        cv2.line(self.imageBlob, p1, p2, (0, 255, 0), 1)  # black line
+        p2 = (Frame.holeCrop.x2-Frame.holeCrop.x1, self.midy)
+        cv2.line(self.imageHoleCrop, p1, p2, (0, 255, 0), 1)  # black line
         p1 = (0, self.midy+1)
-        p2 = (Frame.BLOB.X2-Frame.BLOB.X1, self.midy+1)
-        cv2.line(self.imageBlob, p1, p2, (255, 255, 255), 1) # white line
+        p2 = (Frame.holeCrop.x2-Frame.holeCrop.x1, self.midy+1)
+        cv2.line(self.imageHoleCrop, p1, p2, (255, 255, 255), 1) # white line
 
-        self.blobState = blobState
-        return blobState
+        self.locateHoleResult = locateHoleResult
+        return locateHoleResult
             
 class Film:
 
