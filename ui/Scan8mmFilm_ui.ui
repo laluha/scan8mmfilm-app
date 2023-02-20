@@ -7,13 +7,24 @@
     <x>0</x>
     <y>0</y>
     <width>1029</width>
-    <height>642</height>
+    <height>644</height>
    </rect>
+  </property>
+  <property name="font">
+   <font>
+    <family>Arial</family>
+    <pointsize>9</pointsize>
+   </font>
   </property>
   <property name="windowTitle">
    <string>8mm Film Scanner</string>
   </property>
   <widget class="QWidget" name="centralwidget">
+   <property name="font">
+    <font>
+     <pointsize>9</pointsize>
+    </font>
+   </property>
    <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="1,10">
     <item>
      <layout class="QVBoxLayout" name="verticalLayout_1">
@@ -484,7 +495,7 @@
            </font>
           </property>
           <property name="text">
-           <string>Min BLOB area:</string>
+           <string>Min hole area:</string>
           </property>
           <property name="alignment">
            <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
@@ -492,14 +503,14 @@
          </widget>
         </item>
         <item row="1" column="3">
-         <widget class="QLineEdit" name="edlMinBlobArea"/>
+         <widget class="QLineEdit" name="edlMinHoleArea"/>
         </item>
        </layout>
       </item>
       <item>
        <layout class="QHBoxLayout" name="horizontalLayout_3">
         <item>
-         <widget class="QLabel" name="lblBlob">
+         <widget class="QLabel" name="lblHoleCrop">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Fixed" vsizetype="Expanding">
             <horstretch>0</horstretch>
@@ -544,7 +555,7 @@
              <x>0</x>
              <y>0</y>
              <width>755</width>
-             <height>503</height>
+             <height>509</height>
             </rect>
            </property>
            <property name="sizePolicy">
@@ -628,7 +639,7 @@
      <x>0</x>
      <y>0</y>
      <width>1029</width>
-     <height>26</height>
+     <height>23</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuMain">
