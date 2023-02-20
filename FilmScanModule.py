@@ -15,7 +15,7 @@ import configparser
 dbg = 0
 
 inifile = os.path.join(os.path.dirname(__file__),'scanner.ini')
-defaultBaseDir = "c:\\data\\film8\\" if os.sep == "\\" else "/home/pi/film8/"
+defaultBaseDir = "c:\\data\\film8" if os.sep == "\\" else "/home/pi/film8"
 
 def loadConfig():
     config = configparser.ConfigParser()
@@ -138,6 +138,7 @@ class Frame:
         
         self.blobState = 1
         self.ownWhiteCutoff = Frame.whiteCutoff
+        self.area = 0
         
         
     def convert_cv_qt(self, cv_img, dest=None):
@@ -276,9 +277,9 @@ class Film:
 
     Resolution = "720x540"
     Framerate = 12
-    filmFolder = defaultBaseDir + "film" + os.sep
-    scanFolder = defaultBaseDir + "scan" + os.sep
-    cropFolder = defaultBaseDir + "crop" + os.sep
+    filmFolder = os.path.join(defaultBaseDir, "film")
+    scanFolder = os.path.join(defaultBaseDir, "scan")
+    cropFolder = os.path.join(defaultBaseDir, "crop")
 
     def __init__(self, name = ""):
         self.name = name
@@ -434,7 +435,7 @@ class Film:
                 "-framerate", str(Film.Framerate), 
                 "-f", "image2",
                 "-pattern_type", "sequence",
-                "-i", Film.cropFolder + "frame%06d.jpg",
+                "-i", os.path.join(Film.cropFolder, "frame%06d.jpg"),
                 "-s", Film.Resolution,
                 "-preset", "ultrafast", filmPathName
                 ])
