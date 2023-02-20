@@ -133,7 +133,6 @@ class Window(QMainWindow, Ui_MainWindow):
     
     def modeChanged(self):
         self.prepLblImage()
-        self.enableButtons()
         if self.rbtnScan.isChecked():
             self.showInfo("Mode Scan")
             if picamera2_present:            
@@ -141,8 +140,7 @@ class Window(QMainWindow, Ui_MainWindow):
                 self.qpicamera2.show()
             if self.frame is None:
                 self.frame = self.film.getFirstFrame()
-            if self.frame is not None:
-                self.showScan()
+            self.showFrame()  
         else:
             self.showInfo("Mode Crop")
             self.lblImage.show()
@@ -419,7 +417,8 @@ class Window(QMainWindow, Ui_MainWindow):
             else:
                 self.lblScanFrame.setText(self.frame.imagePathName)       
             self.lblInfo1.setText(f"Frame W={Frame.rect.getXSize()} H={Frame.rect.getYSize()} cX={frame.cX} cY={frame.cY} ar={Frame.rect.getXSize()/Frame.rect.getYSize():.2f}")
-            self.lblInfo2.setText(f"Blob area={frame.area} bs={frame.blobState} Wcut={frame.ownWhiteCutoff}")
+            if frame.area is not None:
+                self.lblInfo2.setText(f"Blob area={frame.area} bs={frame.blobState} Wcut={frame.ownWhiteCutoff}")
         else:
             self.lblScanInfo.setText(f"Frame count = {self.film.scanFileCount}")
             self.lblScanFrame.setText(Film.scanFolder) 
@@ -427,16 +426,19 @@ class Window(QMainWindow, Ui_MainWindow):
             self.lblInfo2.setText("")
 
     def refreshFrame(self):
-        self.frame = Frame(self.frame.imagePathName)
+        if self.frame is not None and self.frame.imagePathName is not None:
+            self.frame = Frame(self.frame.imagePathName)
         self.showFrame()
   
     def showFrame(self):
-        if self.frame is not None:
-            if self.rbtnScan.isChecked():
+        if self.rbtnScan.isChecked():
+            if self.frame is not None:
                 self.showScan()
-            else:
+        else:
+            if self.frame is not None:
                 self.showCrop() 
         self.updateInfoPanel()
+        self.enableButtons()
         
     def showScan(self):
         if picamera2_present:  
@@ -555,22 +557,18 @@ class QThreadScan(QtCore.QThread):
     def __init__(self, film, parent=None):
         QtCore.QThread.__init__(self, parent)
         self.film = film
-        self.cmd = 1 # go
+        self.cmd = 1 # run 
         self.midy = Frame.midy
         self.tolerance = 6
         self.frameNo = film.scanFileCount
         
     def on_source(self, cmd):
-        self.cmd = cmd
-        
-    def progress(self, frame) :
-        cnt = self.film.curFrameNo
-        self.sigProgress.emit(f"{cnt} frames scanned", cnt, frame)    
-        return self.cmd
-            
+        self.cmd = cmd    
+       
     def run(self):
         self.running = True
         pidevi.startScanner()
+        self.blobState = 0
         
         while self.cmd == 1 :
             try:
@@ -581,6 +579,7 @@ class QThreadScan(QtCore.QThread):
                 blobState = self.frame.find_blob(Frame.BLOB_MIN_AREA)
                 if blobState != 0 :
                     self.cmd = 0
+                    self.blobState = blobState
                     break
                 tolstep = 2
                 
@@ -593,7 +592,7 @@ class QThreadScan(QtCore.QThread):
                     sleep(.2)  
 
                 if (self.frame.cY <= self.midy + self.tolerance) and (self.frame.cY >= self.midy - self.tolerance):
-                    imgname = Film.scanFolder + 'scan' + ' - ' + format(self.frameNo, '06') + '.jpg'              
+                    imgname = os.path.join(Film.scanFolder, 'scan' + format(self.frameNo, '06') + '.jpg')             
                     request = picam2.capture_request()
                     request.save("main", imgname)
                     print("imgname", imgname)
@@ -608,10 +607,12 @@ class QThreadScan(QtCore.QThread):
                   
             except Exception as err:
                 print("QThreadScan", err)
-                self.sigStateChange.emit(str(err), -2)
+                self.sigStateChange.emit(str(err), -9)
+                self.cmd = -9
             
         self.running = False
-        self.sigStateChange.emit("Done", -1)
+        if self.cmd == 0:
+            self.sigStateChange.emit("Done", self.blobState)
 
 # =============================================================================
 
