@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import pyqtSignal, QTimer
 from PyQt5 import QtCore, QtWidgets
-from FilmScanModule import Frame, Film, loadConfig, saveConfig, getAdjustableRects
+from FilmScanModule import Ini, Camera, Frame, Film, getAdjustableRects
 import sys
 from time import sleep
 import cv2
@@ -24,7 +24,7 @@ except ImportError:
 
 if picamera2_present:
     picam2 = Picamera2()
-    preview_config = picam2.create_preview_configuration(main={"size": (1640, 1232)},transform=Transform(vflip=True,hflip=True))
+    preview_config = picam2.create_preview_configuration(main={"size": (Camera.ViewWidth, Camera.ViewHeight)},transform=Transform(vflip=True,hflip=True))
     # preview_config = picam2.create_preview_configuration(main={"size": (3280, 2464)},transform=Transform(vflip=True,hflip=True))
     picam2.configure(preview_config)
     
@@ -38,7 +38,7 @@ class Window(QMainWindow, Ui_MainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setupUi(self)
-        loadConfig()
+        Ini.loadConfig()
         if picamera2_present:
             self.lblImage.hide() 
             # self.qpicamera2 = QGlPicamera2(picam2, width=3280, height=2464, keep_ar=True)
@@ -189,7 +189,7 @@ class Window(QMainWindow, Ui_MainWindow):
             if picamera2_present: 
                 self.enableButtons(busy=True)  
                 self.motorStart()
-                pidevi.stepCw(pidevi.step_count)
+                pidevi.stepCw(Film.StepsPrFrame)
                 pidevi.spoolStart()
                 self.showHoleCrop()
         else:
@@ -202,7 +202,7 @@ class Window(QMainWindow, Ui_MainWindow):
             if picamera2_present: 
                 self.enableButtons(busy=True)  
                 self.motorStart()
-                pidevi.stepCcw(pidevi.step_count)
+                pidevi.stepCcw(Film.StepsPrFrame)
                 pidevi.spoolStart()
                 self.showHoleCrop()
         else:
@@ -243,6 +243,7 @@ class Window(QMainWindow, Ui_MainWindow):
             else:
                 self.adjustableRects[self.adjRectIx].adjYSize(1)
             self.refreshFrame() 
+            self.showAdjustValues()
             
     def up(self):
         if self.rbtnScan.isChecked():
@@ -258,6 +259,7 @@ class Window(QMainWindow, Ui_MainWindow):
             else:
                 self.adjustableRects[self.adjRectIx].adjYSize(-1)
             self.refreshFrame()
+            self.showAdjustValues()
             
     def left(self):
         if self.rbtnCrop.isChecked():
@@ -266,6 +268,7 @@ class Window(QMainWindow, Ui_MainWindow):
             else:
                 self.adjustableRects[self.adjRectIx].adjXSize(-1)
             self.refreshFrame()
+            self.showAdjustValues()
             
     def right(self):
         if self.rbtnCrop.isChecked():
@@ -274,9 +277,11 @@ class Window(QMainWindow, Ui_MainWindow):
             else:
                 self.adjustableRects[self.adjRectIx].adjXSize(1)
             self.refreshFrame()
+            self.showAdjustValues()
 
     def adjustableRectChanged(self, i):
         self.adjRectIx = i
+        self.showAdjustValues()
         
     def minHoleAreaChanged(self):
         minArea = int(self.edlMinHoleArea.text())
@@ -300,7 +305,7 @@ class Window(QMainWindow, Ui_MainWindow):
         
     def capture_done(self,job):
         image = picam2.wait(job)
-        print("picture taken!")
+        # print("picture taken!")
         sleep(0.5)
         image = cv2.resize(image, (640, 480))
         self.frame = Frame(image=image)
@@ -328,14 +333,14 @@ class Window(QMainWindow, Ui_MainWindow):
             self.lblHoleCrop.setPixmap(frame.getHoleCrop())
             self.frame = frame
 
-    def cropStateChange(self, info, i):
+    def cropStateChange(self, info, res):
         self.updateInfoPanel()        
-        self.showInfo(info)
+        self.showInfo(f"{info} result={res}")
         self.enableButtons(busy=False)
 
-    def scanStateChange(self, info, i):
+    def scanStateChange(self, info, locateHoleResult):
         self.updateInfoPanel()
-        self.showInfo(info)
+        self.showInfo(f"{info} locateHoleResult={locateHoleResult}")
         self.scanDone = True
         self.enableButtons(busy=False)
         self.motorStop()
@@ -416,15 +421,22 @@ class Window(QMainWindow, Ui_MainWindow):
                 self.lblScanFrame.setText(Film.scanFolder)
             else:
                 self.lblScanFrame.setText(self.frame.imagePathName)       
-            self.lblInfo1.setText(f"Frame W={Frame.frameCrop.getXSize()} H={Frame.frameCrop.getYSize()} cX={frame.cX} cY={frame.cY} ar={Frame.frameCrop.getXSize()/Frame.frameCrop.getYSize():.2f}")
+                    
+            # self.lblInfo1.setText(f"Frame W={Frame.frameCrop.getXSize()} H={Frame.frameCrop.getYSize()} cX={frame.cX} cY={frame.cY} ar={Frame.frameCrop.getXSize()/Frame.frameCrop.getYSize():.2f}")
+            self.lblInfo1.setText(f"cX={frame.cX} cY={frame.cY} midy={Frame.midy}")
             if frame.area is not None:
-                self.lblInfo2.setText(f"Hole area={frame.area} res={frame.locateHoleResult} whiteTrsh={frame.ownWhiteTreshold}")
+                self.lblInfo2.setText(f"res={frame.locateHoleResult} wTrsh={frame.whiteTreshold} area={int(frame.area)}")
         else:
             self.lblScanInfo.setText(f"Frame count = {self.film.scanFileCount}")
             self.lblScanFrame.setText(Film.scanFolder) 
             self.lblInfo1.setText("")
             self.lblInfo2.setText("")
 
+    def showAdjustValues(self):
+        rect = self.adjustableRects[self.adjRectIx]
+        ar = "" if self.adjRectIx != 0 else f"aspect ratio={rect.getXSize()/rect.getYSize():.2f}" 
+        self.statusbar.showMessage(f"Adjusted: {rect.name} x1={rect.x1} y1={rect.y1}  x2={rect.x2} y2={rect.y2} width={rect.x2-rect.x1} height={rect.y2-rect.y1} {ar}")
+    
     def refreshFrame(self):
         if self.frame is not None and self.frame.imagePathName is not None:
             self.frame = Frame(self.frame.imagePathName)
@@ -460,12 +472,12 @@ class Window(QMainWindow, Ui_MainWindow):
         if self.doLblImagePrep and self.horizontalLayout_4.SizeConstraint != QtWidgets.QLayout.SetMinimumSize :
             self.horizontalLayout_4.setSizeConstraint(QtWidgets.QLayout.SetMinimumSize)
             self.lblImage.clear()
-            elf.doLblImagePrep = False
+            self.doLblImagePrep = False
  
     def showHoleCrop(self): # ,"format": "RGB888"
         if picamera2_present:
             self.enableButtons(busy=True)
-            capture_config = picam2.create_still_configuration(main={"format": "RGB888","size": (1640, 1232)},transform=Transform(vflip=True,hflip=True))
+            capture_config = picam2.create_still_configuration(main={"format": "RGB888","size": (Camera.ViewWidth, Camera.ViewHeight)},transform=Transform(vflip=True,hflip=True))
             # This causes a call to capture_done when done 
             picam2.switch_mode_and_capture_array(capture_config, "main", signal_function=self.qpicamera2.signal_done)
 
@@ -543,7 +555,7 @@ class QThreadCrop(QtCore.QThread):
             sleep(1)    
         except Exception as err:
             self.sigStateChange.emit(str(err), -2)
-            print("QThreadScan", err)
+            print("QThreadCrop", err)
             
         self.sigStateChange.emit("Done", -1)
         self.running = False
@@ -573,7 +585,7 @@ class QThreadScan(QtCore.QThread):
         while self.cmd == 1 :
             try:
                 pidevi.spoolStart()
-                capture_config = picam2.create_still_configuration(main={"format": "RGB888","size": (1640, 1232)},transform=Transform(vflip=True,hflip=True))
+                capture_config = picam2.create_still_configuration(main={"format": "RGB888","size": (Camera.ViewWidth, Camera.ViewHeight)},transform=Transform(vflip=True,hflip=True))
                 image = picam2.switch_mode_and_capture_array(capture_config, "main") #, signal_function=self.qpicamera2.signal_done)
                 self.frame = Frame(image=image)
                 locateHoleResult = self.frame.locateSprocketHole(Frame.holeMinArea)
@@ -600,7 +612,7 @@ class QThreadScan(QtCore.QThread):
                     request.release()
                     # signal progress
                     self.sigProgress.emit(f"{self.frameNo} frames scanned", self.frameNo, self.frame)    
-                    pidevi.stepCw(pidevi.step_count)
+                    pidevi.stepCw(Film.StepsPrFrame)
                     self.frameNo += 1
 
                 sleep(0.1)  
@@ -628,5 +640,5 @@ if __name__ == "__main__":
     except:
         if  picamera2_present:
             pidevi.cleanup()
-    saveConfig()
+    Ini.saveConfig()
     sys.exit(0)
