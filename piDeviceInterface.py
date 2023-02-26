@@ -7,14 +7,6 @@ from time import sleep
 import cv2
 
 try:
-    from picamera2 import Picamera2
-    from picamera2.previews.qt import QGlPicamera2
-    from libcamera import Transform
-    picamera2_present = True
-except ImportError:
-    picamera2_present = False
-    
-try:
     import RPi.GPIO as GPIO
     RPi_GPIO_present = True
 except ImportError:
@@ -40,7 +32,6 @@ ledon = 12  # pin for LED
 pin_forward = 6  # motor pin (spool)
 pin_backward = 5
 
-step_count = 80  # steps per frame (R8)
 delay = .001  # delay inbetween steps
 tolstep = 2 // 2  # defines how many steps are done for correction
 steps = 0
@@ -71,31 +62,7 @@ def initGpio() :
     GPIO.setup((18, 15, 14), GPIO.OUT)
 
     pwm = GPIO.PWM(6, 40)  # set PWM channel, hz
-    print("GPIO setup");
-
-def setCamera():
-    global picam2
-    picam2 = Picamera2()                                             # (1296, 972)
-    preview_config = picam2.create_preview_configuration(main={"size": (1640, 1232)},transform=Transform(vflip=True,hflip=True))
-    picam2.configure(preview_config)
-    # picam2.start_preview(Preview.QTGL)
-    # picam2.start()
-    qpicamera2 = QGlPicamera2(picam2, width=800, height=600, keep_ar=True)
-    
-def takePicture(picam2):
-    print("take_picture")
-    sleep(1)
-    # capture_config = picam2.create_still_configuration({"format": "YUV420"})
-    # capture_config = picam2.create_still_configuration({"format": "BGR888"})
-    capture_config = picam2.create_still_configuration({"format": "RGB888"},transform=Transform(vflip=True,hflip=True))
-    image = picam2.switch_mode_and_capture_array(capture_config, "main") #, signal_function=qpicamera2.signal_done)
-    print("picture taken!")
-    sleep(0.5)
-    image = cv2.resize(image, (640, 480))
-    # cv2imshow("Output",image)
-    # sleep(0.2)
-    # cv2.waitKey(2)
-    return image
+    print("GPIO setup")
     
 def spoolStart():
     pint = GPIO.input(photoint)
