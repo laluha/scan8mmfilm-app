@@ -17,35 +17,78 @@ dbg = 0
 inifile = os.path.join(os.path.dirname(__file__),'scanner.ini')
 defaultBaseDir = "c:\\data\\film8" if os.sep == "\\" else "/home/pi/film8"
 
-def loadConfig():
-    config = configparser.ConfigParser()
-    if len(config.read(inifile)) == 1:
-        Frame.frameCrop.load(config)
-        Frame.whiteCrop.load(config)
-        Frame.holeCrop.load(config)
-        Frame.holeMinArea = config['holeCrop'].getint('holeMinArea')
-        Film.filmFolder = config['paths']['filmFolder']
-        Film.scanFolder = config['paths']['scanFolder']
-        Film.cropFolder = config['paths']['cropFolder']
-    else:
-        saveConfig()
-    
-def saveConfig():
-    config = configparser.ConfigParser()
-    Frame.frameCrop.save(config)
-    Frame.whiteCrop.save(config)
-    Frame.holeCrop.save(config)
-    config['holeCrop']['holeMinArea'] = str(Frame.holeMinArea) 
-    if not config.has_section('paths'):
-            config['paths'] = {}
-    config['paths']['filmFolder'] = Film.filmFolder
-    config['paths']['scanFolder'] = Film.scanFolder
-    config['paths']['cropFolder'] = Film.cropFolder
-    with open(inifile, 'w') as configfile:
-       config.write(configfile)
-       
+class Ini:
+    camera = 'camera'
+    paths = 'paths'
+    film = 'film'
+    frame = 'frame'
+
+    def loadConfig():
+        config = configparser.ConfigParser()
+
+        if len(config.read(inifile)) == 1:
+
+            Film.filmFolder = config[Ini.paths]['film_folder']
+            Film.scanFolder = config[Ini.paths]['scan_folder']
+            Film.cropFolder = config[Ini.paths]['crop_folder']
+
+            Camera.ViewWidth = config[Ini.camera].getint('view_width')
+            Camera.ViewHeight = config[Ini.camera].getint('view_height')
+
+            Film.Resolution = config[Ini.film]['resolution']
+            Film.Framerate = config[Ini.film].getint('framerate')
+            Film.StepsPrFrame = config[Ini.film].getint('steps_pr_frame')
+
+            Frame.frameCrop.load(config)
+            Frame.whiteCrop.load(config)
+            Frame.holeCrop.load(config)
+
+            Frame.holeMinArea = config[Ini.frame].getint('hole_min_area')
+            Frame.midy = config[Ini.frame].getint('midy')
+
+        else:
+            Ini.saveConfig()
+
+        Frame.initScaleFactor()
+        
+    def saveConfig():
+        config = configparser.ConfigParser()
+
+        if not config.has_section(Ini.paths):
+            config[Ini.paths] = {}
+        config[Ini.paths]['film_folder'] = Film.filmFolder
+        config[Ini.paths]['scan_folder'] = Film.scanFolder
+        config[Ini.paths]['crop_folder'] = Film.cropFolder
+        
+        if not config.has_section(Ini.camera):
+            config[Ini.camera] = {}
+        config[Ini.camera]['view_width'] = str(Camera.ViewWidth)
+        config[Ini.camera]['view_height'] = str(Camera.ViewHeight)
+
+        if not config.has_section(Ini.film):
+            config[Ini.film] = {}
+        config[Ini.film]['resolution'] = Film.Resolution
+        config[Ini.film]['framerate']  = str(Film.Framerate)
+        config[Ini.film]['steps_pr_frame'] = str(Film.StepsPrFrame)
+
+        Frame.frameCrop.save(config)
+        Frame.whiteCrop.save(config)
+        Frame.holeCrop.save(config)
+
+        if not config.has_section(Ini.frame):
+            config[Ini.frame] = {}
+        config[Ini.frame]['hole_min_area'] = str(Frame.holeMinArea) 
+        config[Ini.frame]['midy'] = str(Frame.midy) 
+
+        with open(inifile, 'w') as configfile:
+            config.write(configfile)
+        
 def getAdjustableRects():
     return [Frame.frameCrop, Frame.holeCrop, Frame.whiteCrop]
+
+class Camera:
+    ViewWidth = 1640
+    ViewHeight = 1232
 
 class Rect:
     def __init__(self, name, x1, y1, x2, y2):
@@ -94,31 +137,31 @@ class Rect:
             self.y2 = self.y2 + adj 
 
 class Frame:
-    ###
-    # ysize = 534 #  needs to be adjusted to fit the picture
-    # xsize = 764 
-        
-    # Top image edgeY = holeCenterY + imageBlackFrame thickness
-    # ycal = 30 # 34 + 267 # 534/2 # 500 calibrate camera frame y position 0=center of hole 
-    
-    # Left image edgeX = holeCenterX + holeW/2: 377 + 288/2 = (holeCrop.x1 + cX) *ScaleFactor + holeW/2
-    # xcal = 144 
-    ###
-    
-    midx = 64
-    midy = 136 
-    
-    frameCrop = Rect("frameCrop", 144, 30, 144+764, 30+534)
 
-    whiteCrop = Rect("whiteCrop", 544, 130, 544+12, 110+130)
-
-    holeCrop = Rect("holeCrop", 90, 0, 240, 276)  
-    holeMinArea = 4000 # 4000  
-        
-    ScaleFactor = 1640.0/640  
-        
-    whiteTreshold = 220
+    # Default x,y values for hole mid relative to holeCrop (0,0) 
+    # from camera view image resized to 640x480
+    # N.B. The midy value is used to position the frame near the center of the camera view during scanning
+    midx = 64   # always overwitten 
+    midy = 120 
     
+    # Needs to be adjusted to fit the a film frame as seen in the camera view image
+    # x1,y1 are relative to the top sprocket hole center
+    frameCrop = Rect("frame_crop", 146, 28, 146+814, 28+565)
+
+    # Must be adjusted to an always white area in the camera view image resized to 640x480
+    whiteCrop = Rect("white_crop", 562, 130, 562+12, 110+130)
+
+    # Must be adjusted to the left top area of the film containing the 
+    # upper sprocket hole in the camera view image resized to 640x480
+    holeCrop = Rect("hole_crop", 90, 0, 240, 276)  
+
+    holeMinArea = 6000 # Adust to a size safely less than the average sprocket hole area
+        
+    ScaleFactor = 1.0 # overwritten by initScaleFactor()
+
+    def initScaleFactor():
+        Frame.ScaleFactor = Camera.ViewWidth/640.0 
+
     def getHoleCropWidth():
         return Frame.holeCrop.x2 - Frame.holeCrop.x1
           
@@ -137,7 +180,7 @@ class Frame:
         self.cY = Frame.midy    
         
         self.locateHoleResult = 1
-        self.ownWhiteTreshold = Frame.whiteTreshold
+        self.whiteTreshold = 225 # always overwritten by call to getWhiteThreshold
         self.area = 0
         
         
@@ -166,7 +209,7 @@ class Frame:
         self.locateHoleResult = self.locateSprocketHole(Frame.holeMinArea)
         
         x = int((self.cX + Frame.holeCrop.x1) * Frame.ScaleFactor)+Frame.frameCrop.x1
-        y = int(self.cY * Frame.ScaleFactor)+Frame.frameCrop.y1 
+        y = int((self.cY + Frame.holeCrop.y1) * Frame.ScaleFactor)+Frame.frameCrop.y1 
         self.p1 = (x, y)
         self.p2 = (x+Frame.frameCrop.getXSize(), y+Frame.frameCrop.getYSize())
         
@@ -206,8 +249,8 @@ class Frame:
         # the image crop with the sprocket hole 
         img = self.imageSmall[Frame.holeCrop.y1:Frame.holeCrop.y2, Frame.holeCrop.x1:Frame.holeCrop.x2]
         img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        self.ownWhiteTreshold = self.getWhiteThreshold(self.imageSmall)
-        ret, self.imageHoleCrop = cv2.threshold(img, self.ownWhiteTreshold, 255, 0) # 220 # 200,255,0
+        self.whiteTreshold = self.getWhiteThreshold(self.imageSmall)
+        ret, self.imageHoleCrop = cv2.threshold(img, self.whiteTreshold, 255, 0) # 220 # 200,255,0
         contours, hierarchy = cv2.findContours(self.imageHoleCrop, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
         # RETR_LIST: retrieves all of the contours without establishing any hierarchical relationships.
         # CHAIN_APPROX_SIMPLE: compresses horizontal, vertical, and diagonal segments and leaves only 
@@ -277,6 +320,8 @@ class Film:
 
     Resolution = "720x540"
     Framerate = 12
+    StepsPrFrame = 80 # value for Standard 8
+
     filmFolder = os.path.join(defaultBaseDir, "film")
     scanFolder = os.path.join(defaultBaseDir, "scan")
     cropFolder = os.path.join(defaultBaseDir, "crop")
