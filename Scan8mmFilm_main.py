@@ -86,23 +86,31 @@ class Window(QMainWindow, Ui_MainWindow):
 
     # Menu actions --------------------------------------------------------------------------------------------
 
-    def selectFilmFolder(self):
-        dir = QtWidgets.QFileDialog.getExistingDirectory(caption="Select Film Folder", directory=os.path.commonpath([Film.filmFolder]))
+    def selectFilmFolder(self, *, text="Select Film Folder"):
+        dir = QtWidgets.QFileDialog.getExistingDirectory(caption=text, directory=os.path.commonpath([Film.filmFolder]))
         if dir:
             Film.filmFolder = os.path.abspath(dir)
-        os.path.commonpath
+            return True
+        return False
+    
 
-    def selectScanFolder(self):
-        dir = QtWidgets.QFileDialog.getExistingDirectory(caption="Select Scan Folder", directory=os.path.commonpath([Film.scanFolder]))
+    def selectScanFolder(self, *, text="Select Scan Folder", init=True):
+        dir = QtWidgets.QFileDialog.getExistingDirectory(caption=text, directory=os.path.commonpath([Film.scanFolder]))
         if dir:
             Film.scanFolder = os.path.abspath(dir)
-            self.initScanner()
+            if init:
+                QTimer.singleShot(100, self.initScanner)
+            return True
+        return False
 
-    def selectCropFolder(self):
-        dir = QtWidgets.QFileDialog.getExistingDirectory(caption="Select Crop Folder", directory=os.path.commonpath([Film.cropFolder]))
+    def selectCropFolder(self, *, text="Select Crop Folder", init=True):
+        dir = QtWidgets.QFileDialog.getExistingDirectory(caption=text, directory=os.path.commonpath([Film.cropFolder]))
         if dir:
             Film.cropFolder = os.path.abspath(dir)
-            self.updateInfoPanel()
+            if init:
+                self.updateInfoPanel()
+            return True
+        return False
 
     def clearScanFolder(self):
         button = QMessageBox.question(self, "Delete",  f"Delete all {Film.getScanCount()} .jpg files in {Film.scanFolder}?",QMessageBox.Yes|QMessageBox.No)
@@ -217,6 +225,9 @@ class Window(QMainWindow, Ui_MainWindow):
                                          
     def makeFilm(self):
         self.showInfo("Make Film")  
+        if not os.path.exists(Film.filmFolder):
+            if not self.selectFilmFolder("Please Select a Film Folder"):
+                 return
         fileName = self.toValidFileName(self.edlFilmName.text())
         if len(fileName) == 0 :
             self.showInfo("Enter a valid filneme!")  
@@ -403,6 +414,16 @@ class Window(QMainWindow, Ui_MainWindow):
     # Shared GUI update methods ---------------------------------------------------------------------------------------------------------------------------     
 
     def initScanner(self):
+        if not os.path.exists(Film.scanFolder):
+            if not self.selectScanFolder(text="Please Select a Scan folder", init=False):
+                 self.doClose()
+                 return
+
+        if not os.path.exists(Film.cropFolder):
+            if not self.selectCropFolder(text="Please select a folder for cropped frames", init=False):
+                self.doClose()
+                return
+                    
         self.film = Film("")
         self.frame = None
         self.lblImage.clear()
