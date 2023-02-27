@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QMessageBox
@@ -24,8 +25,8 @@ except ImportError:
 
 if picamera2_present:
     picam2 = Picamera2()
-    preview_config = picam2.create_preview_configuration(main={"size": (Camera.ViewWidth, Camera.ViewHeight)},transform=Transform(vflip=True,hflip=True))
-    # preview_config = picam2.create_preview_configuration(main={"size": (3280, 2464)},transform=Transform(vflip=True,hflip=True))
+    preview_config = picam2.create_preview_configuration(main={"size": (Camera.ViewWidth, Camera.ViewHeight)},
+        transform=Transform(vflip=True,hflip=True))
     picam2.configure(preview_config)
     
     pidevi.initGpio()
@@ -285,7 +286,7 @@ class Window(QMainWindow, Ui_MainWindow):
         
     def minHoleAreaChanged(self):
         minArea = int(self.edlMinHoleArea.text())
-        if minArea > 200 and minArea < 10000:
+        if minArea > 200 and minArea <= 30000:
             Frame.holeMinArea = minArea
         
     def rewindChanged(self):
@@ -335,12 +336,25 @@ class Window(QMainWindow, Ui_MainWindow):
 
     def cropStateChange(self, info, res):
         self.updateInfoPanel()        
-        self.showInfo(f"{info} result={res}")
+        self.showInfo(info)
         self.enableButtons(busy=False)
+    
+    def resultToText(self, res):
+        if res == 0:
+            return "Hole found"
+        elif res == 1: 
+            return "Hole not found"
+        elif res == 2: 
+            return "Hole to large. No film?" # hole to large
+        elif res == 3: 
+            return "Hole malformed - no center"
+        else:
+            return "" # e.g. -1
 
-    def scanStateChange(self, info, locateHoleResult):
+
+    def scanStateChange(self, info, result):
         self.updateInfoPanel()
-        self.showInfo(f"{info} locateHoleResult={locateHoleResult}")
+        self.showInfo(info + self.resultToText(result))
         self.scanDone = True
         self.enableButtons(busy=False)
         self.motorStop()
@@ -422,7 +436,6 @@ class Window(QMainWindow, Ui_MainWindow):
             else:
                 self.lblScanFrame.setText(self.frame.imagePathName)       
                     
-            # self.lblInfo1.setText(f"Frame W={Frame.frameCrop.getXSize()} H={Frame.frameCrop.getYSize()} cX={frame.cX} cY={frame.cY} ar={Frame.frameCrop.getXSize()/Frame.frameCrop.getYSize():.2f}")
             self.lblInfo1.setText(f"cX={frame.cX} cY={frame.cY} midy={Frame.midy}")
             if frame.area is not None:
                 self.lblInfo2.setText(f"res={frame.locateHoleResult} wTrsh={frame.whiteTreshold} area={int(frame.area)}")
@@ -457,12 +470,12 @@ class Window(QMainWindow, Ui_MainWindow):
             self.showHoleCrop()
         else:
             self.prepLblImage()
-            self.lblImage.setPixmap(self.frame.getQPixmap(self.scrollAreaWidgetContents) ) #self.lblImage.contentsRect()))
+            self.lblImage.setPixmap(self.frame.getQPixmap(self.scrollAreaWidgetContents) )
         self.lblHoleCrop.update()
         
     def showCrop(self):
         self.prepLblImage()
-        self.lblImage.setPixmap(self.frame.getCropOutline(self.scrollAreaWidgetContents) ) #self.lblImage.contentsRect()))
+        self.lblImage.setPixmap(self.frame.getCropOutline(self.scrollAreaWidgetContents) )
         self.lblHoleCrop.setPixmap(self.frame.getHoleCrop())
     
     def showInfo(self,text):
@@ -474,7 +487,7 @@ class Window(QMainWindow, Ui_MainWindow):
             self.lblImage.clear()
             self.doLblImagePrep = False
  
-    def showHoleCrop(self): # ,"format": "RGB888"
+    def showHoleCrop(self): 
         if picamera2_present:
             self.enableButtons(busy=True)
             capture_config = picam2.create_still_configuration(main={"format": "RGB888","size": (Camera.ViewWidth, Camera.ViewHeight)},transform=Transform(vflip=True,hflip=True))
@@ -501,7 +514,6 @@ class Window(QMainWindow, Ui_MainWindow):
         self.lblInfo2.setText("")
         self.threadCrop = QThreadCrop(self.film)
         self.sigToCropTread.connect(self.threadCrop.on_source)
-        self.sigToCropTread.emit(1) 
         self.threadCrop.sigProgress.connect(self.cropProgress)
         self.threadCrop.sigStateChange.connect(self.cropStateChange)
         self.threadCrop.start()
@@ -515,7 +527,6 @@ class Window(QMainWindow, Ui_MainWindow):
         self.motorStart()
         self.threadScan = QThreadScan(self.film)
         self.sigToScanTread.connect(self.threadScan.on_source)
-        self.sigToScanTread.emit(1) 
         self.threadScan.sigProgress.connect(self.scanProgress)
         self.threadScan.sigStateChange.connect(self.scanStateChange)
         self.threadScan.start()
@@ -538,8 +549,11 @@ class QThreadCrop(QtCore.QThread):
         QtCore.QThread.__init__(self, parent)
         self.film = film
         self.cmd = 1 # run
+        self.result = "Done"
         
     def on_source(self, cmd):
+        if cmd  == 0:
+            self.result = "Stopped manually"
         self.cmd = cmd
         
     def progress(self, frame) :
@@ -554,10 +568,10 @@ class QThreadCrop(QtCore.QThread):
             self.film.cropAll(self.progress)
             sleep(1)    
         except Exception as err:
-            self.sigStateChange.emit(str(err), -2)
+            self.result = "Exception: " + str(err)
             print("QThreadCrop", err)
             
-        self.sigStateChange.emit("Done", -1)
+        self.sigStateChange.emit(self.result, self.cmd)
         self.running = False
 
 # Thread =============================================================================
@@ -572,16 +586,27 @@ class QThreadScan(QtCore.QThread):
         self.cmd = 1 # run 
         self.midy = Frame.midy
         self.tolerance = 6
-        self.frameNo = film.scanFileCount
+        self.frameNo = Film.getFileCount(Film.scanFolder)
         
     def on_source(self, cmd):
         self.cmd = cmd    
+        
+    def saveFrame(self):
+        imgname = os.path.join(Film.scanFolder, 'scan' + format(self.frameNo, '06') + '.jpg')             
+        request = picam2.capture_request()
+        request.save("main", imgname)
+        print("imgname", imgname)
+        #print(request.get_metadata()) # this is the metadata for this image
+        request.release()
+        # signal progress
+        self.sigProgress.emit(f"{self.frameNo} frames scanned", self.frameNo, self.frame)    
        
     def run(self):
         self.running = True
         pidevi.startScanner()
         self.locateHoleResult = 0
-        
+        oldY = 0
+        stuckCount = 0
         while self.cmd == 1 :
             try:
                 pidevi.spoolStart()
@@ -589,42 +614,60 @@ class QThreadScan(QtCore.QThread):
                 image = picam2.switch_mode_and_capture_array(capture_config, "main") #, signal_function=self.qpicamera2.signal_done)
                 self.frame = Frame(image=image)
                 locateHoleResult = self.frame.locateSprocketHole(Frame.holeMinArea)
+                
+                print("cY",self.frame.cY ,"oldY", oldY, "locateHoleResult", locateHoleResult,"cmd",self.cmd,"area",self.frame.area)
+                
                 if locateHoleResult != 0 :
-                    self.cmd = 0
+                    self.cmd = 2
                     self.locateHoleResult = locateHoleResult
                     break
+                    
+                if oldY != 0 and oldY == self.frame.cY :
+                    # adjustment failed - film stuck
+                    stuckCount += 1
+                    if stuckCount > 5:
+                        # film really really stuck
+                        self.cmd = 3
+                        break
+                           
                 tolstep = 2
                 
                 if self.frame.cY > self.midy + self.tolerance:
+                    self.sigProgress.emit(f"{self.frameNo} adjusting up", self.frameNo, self.frame)  
                     pidevi.stepCw(tolstep)
                     sleep(.2)  
+                    oldY = self.frame.cY
 
                 if self.frame.cY < self.midy - self.tolerance:
+                    self.sigProgress.emit(f"{self.frameNo} adjusting down", self.frameNo, self.frame)  
                     pidevi.stepCcw(tolstep)
-                    sleep(.2)  
-
+                    sleep(.2) 
+                    oldY = self.frame.cY 
+                    
                 if (self.frame.cY <= self.midy + self.tolerance) and (self.frame.cY >= self.midy - self.tolerance):
-                    imgname = os.path.join(Film.scanFolder, 'scan' + format(self.frameNo, '06') + '.jpg')             
-                    request = picam2.capture_request()
-                    request.save("main", imgname)
-                    print("imgname", imgname)
-                    #print(request.get_metadata()) # this is the metadata for this image
-                    request.release()
-                    # signal progress
-                    self.sigProgress.emit(f"{self.frameNo} frames scanned", self.frameNo, self.frame)    
+                    self.saveFrame() 
                     pidevi.stepCw(Film.StepsPrFrame)
                     self.frameNo += 1
+                    adjustedY = 0
+                    stuckCount = 0
 
                 sleep(0.1)  
                   
             except Exception as err:
                 print("QThreadScan", err)
-                self.sigStateChange.emit(str(err), -9)
-                self.cmd = -9
+                self.sigStateChange.emit("Exception:" + str(err), -1)
+                self.cmd = -1
             
+        if self.frameNo == 0:
+            # Save at least one frame for adjusting image cropping in crop mode
+            self.saveFrame() 
         self.running = False
         if self.cmd == 0:
-            self.sigStateChange.emit("Done", self.locateHoleResult)
+            self.sigStateChange.emit("Stopped manually", -1)
+        elif self.cmd == 2:
+            self.sigStateChange.emit("Stopped: ", self.locateHoleResult)
+        elif self.cmd == 3:
+            self.sigStateChange.emit("Stopped: Film is stuck", -1)
 
 # =============================================================================
 
