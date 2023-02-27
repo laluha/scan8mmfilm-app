@@ -1,9 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Sun Jan 15 18:45:07 2023
 
-@author: B
-"""
 import os, fnmatch
 import cv2
 import random
@@ -233,7 +229,7 @@ class Frame:
         histRange = (0, 256) # Set the range
         hist = cv2.calcHist(planes, [0], None, [histSize], histRange, accumulate=False)    
         okPct = (Frame.whiteCrop.y2-Frame.whiteCrop.y1)*(Frame.whiteCrop.x2-Frame.whiteCrop.x1)/100.0*5
-        wco = 220
+        wco = 220 # Default value - will work in most cases
         for i in range(128,256) :
             if hist[i] > okPct :
                 wco = i-8 #6
@@ -241,16 +237,17 @@ class Frame:
         return wco        
       
     # area size has to be set to identify the sprocket hole
-    # if the sprocket hole area is around 2500, then 2000 should be a safe choice
+    # if the sprocket hole area is around 8000, then 6000 should be a safe choice
     # the area size will trigger the exit from the loop
-    
+    # Return values:
+    # 0: hole found, 1: hole not found, 2: hole to large, 3: no center
     def locateSprocketHole(self, area_size):
         self.imageSmall = cv2.resize(self.image, (640, 480))
         # the image crop with the sprocket hole 
         img = self.imageSmall[Frame.holeCrop.y1:Frame.holeCrop.y2, Frame.holeCrop.x1:Frame.holeCrop.x2]
         img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         self.whiteTreshold = self.getWhiteThreshold(self.imageSmall)
-        ret, self.imageHoleCrop = cv2.threshold(img, self.whiteTreshold, 255, 0) # 220 # 200,255,0
+        ret, self.imageHoleCrop = cv2.threshold(img, self.whiteTreshold, 255, 0) 
         contours, hierarchy = cv2.findContours(self.imageHoleCrop, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
         # RETR_LIST: retrieves all of the contours without establishing any hierarchical relationships.
         # CHAIN_APPROX_SIMPLE: compresses horizontal, vertical, and diagonal segments and leaves only 
@@ -269,19 +266,21 @@ class Frame:
             if area > area_size:
                 locateHoleResult = 0 # hole found
                 self.area = area
+                if area > 3*area_size:
+                    locateHoleResult = 2 # very large contour found == no film
                 # print("found")
                 # print("area=", area)
                 break
         if locateHoleResult == 0:      
             M = cv2.moments(cnt)
-            #print(M)
+            # print(M)
             try:
                 self.cX = int(M["m10"] / M["m00"])
                 self.cY = int(M["m01"] / M["m00"])
                 #holeDist = 225
                 #if cY > holeDist : # distance between holes
                 #    print("cY=", cY)
-                #    locateHoleResult = 2 # 2. hole found
+                #    locateHoleResult = 4 # 2. hole found
                 #    cY = cY - holeDist
             except ZeroDivisionError:
                 if dbg >= 2: print("no center")
@@ -289,23 +288,21 @@ class Frame:
                 self.cX = oldcX
                 self.cY = oldcY # midy
         else :
-            if dbg >= 2: print("no hole located")
-            locateHoleResult = 1
             self.cX = oldcX
-            self.cY = oldcY        
+            self.cY = oldcY  
+                  
         if dbg >= 2: print("cY=", self.cY, "oldcY=", oldcY, "locateHoleResult=", locateHoleResult)
-        # if dbg >= 2:
-            # ui = input("press return")   
+ 
         p1 = (0, self.cY) 
         p2 = (Frame.holeCrop.x2-Frame.holeCrop.x1, self.cY)
-        #print(p1, p2)
+        # print(p1, p2)
         cv2.line(self.imageHoleCrop, p1, p2, (0, 255, 0), 3)
         p1 = (self.cX, 0) 
         p2 = (self.cX, Frame.holeCrop.y2-Frame.holeCrop.y1) 
-        #print(p1, p2)
+        # print(p1, p2)
         cv2.line(self.imageHoleCrop, p1, p2, (0, 255, 0), 3)
         
-        #show target midy
+        # show target midy
         p1 = (0, self.midy) 
         p2 = (Frame.holeCrop.x2-Frame.holeCrop.x1, self.midy)
         cv2.line(self.imageHoleCrop, p1, p2, (0, 255, 0), 1)  # black line
@@ -328,7 +325,7 @@ class Film:
 
     def __init__(self, name = ""):
         self.name = name
-        self.scanFileCount = len(Film.getFileList(Film.scanFolder))  # - number of *.jpg files in scan directory
+        self.scanFileCount = Film.getFileCount(Film.scanFolder)  # - number of *.jpg files in scan directory
         self.curFrameNo = -1
         self.p = None
      
