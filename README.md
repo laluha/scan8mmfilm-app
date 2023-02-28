@@ -76,7 +76,7 @@ This is OK for my purpose.
 The software tries to position the frame to be scanned centred in the camera view in order to get the best quality. This is done by tracking the position of the upper sprocket hole and moving the film forward or backward. Functionality from the software module OpenCV is used to locate the exact position of the hole. 
 
 When the images are scanned the stepper motor moves the film forward one frame at a time.
-The number of steps needed for forwarding one frame is approximately 80 microsteps (Regular 8) when the DRV8825 is set to 80 microsteps/step (M0=1, M1=1, M2=0) as in Anton’s software.
+The number of steps needed for forwarding one frame is approximately 80 microsteps (Regular 8) when the DRV8825 is set to 8 microsteps/step (M0=1, M1=1, M2=0) as in Anton’s software.
 When moving many frames forward a small adjustment is needed from time to time.
 
 ## Finding the position of the sprocket hole
@@ -157,7 +157,7 @@ During scanning the hole_crop image and position information will be updated for
 The scanner stores the frames named as “scanNNNNNN.jpg” where NNNNNN is a zero prefixed 6 digit frame number e.g. “scan000008.jpg”
  
 ## Adjusting  settings in Crop mode
-Shown below is a screenshot of the Scanner GUI in Crop Mode.
+Shown below is an annotated screenshot of the Scanner GUI in Crop Mode.
 
 ![camera view](img/ScannerGUI-annotated.jpg)
 
